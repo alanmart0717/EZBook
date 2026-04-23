@@ -1,14 +1,41 @@
 const express = require("express");
 const cors = require("cors");
-
-const authRoutes = require("./routes/auth.routes");
+require("dotenv").config;
 
 const app = express();
 
+// MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 
 // Auth routes
+const authRoutes = require("./routes/auth.routes");
 app.use("/api/auth", authRoutes);
+
+//Provider profile routes
+const providerProfileRoutes = require("./routes/provider.profile.routes");
+app.use("/api/provider/profile", providerProfileRoutes);
+
+//Provider availability routes
+const providerAvailabilityRoutes = require("./routes/provider.availability.routes");
+app.use("/api/provider/availability", providerAvailabilityRoutes);
+
+//Service routes
+const serviceRoutes = require("./routes/service.routes");
+app.use("/api/services", serviceRoutes);
+
+// Health check
+app.get("/", (req, res) => {
+    res.json({ message: "EZbook API is running" });
+});
+
+
+// Error Handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        error: "Something went wrong on the server"
+    });
+});
 
 module.exports = app;
