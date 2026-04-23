@@ -19,6 +19,16 @@ exports.createBooking = (req, res) => {
   res.status(201).json(booking);
 };
 
+exports.bookSlot = (req, res) => {
+    const result = bookingService.bookSlot(req.body);
+
+    if (result.error) {
+        return res.status(400).json(result);
+    }
+
+    res.json(result);
+};
+
 exports.updateBookingStatus = (req, res) => {
   const { id } = req.params;
   const { status } = req.body;

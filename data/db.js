@@ -3,7 +3,7 @@ module.exports = {
   users: [],
   businessProfiles: [],
   services: [],
-  availabilities: [],
+  availabilitieslots: [],
   bookings: [],
   messages: []
 };
