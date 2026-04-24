@@ -1,8 +1,24 @@
+/**
+ * Main App Component - EZBook Service Booking Platform
+ * 
+ * This is the primary entry point for the EZBook application.
+ * It manages:
+ * - User authentication flow (customer vs. provider signup)
+ * - Service browsing and search functionality
+ * - Dark mode toggle
+ * - Provider dashboard access
+ * - Navigation between different app views
+ */
+
 import { useState } from 'react';
 import './App.css';
 import ProviderDashboard from './ProviderDashboard';
 
-// Placeholder categories — swap with real API data when providers are integrated
+/**
+ * Service categories displayed in the browsing interface
+ * TODO: Replace with real API data once providers are integrated
+ * Each category includes an ID, display label, and emoji icon
+ */
 const SERVICE_CATEGORIES = [
   { id: 1, label: 'Hair & Beauty', icon: '✂️' },
   { id: 2, label: 'Health & Wellness', icon: '🧘' },
@@ -12,7 +28,15 @@ const SERVICE_CATEGORIES = [
   { id: 6, label: 'Pet Care', icon: '🐾' },
 ];
 
-
+/**
+ * Navbar Component - Top navigation bar
+ * Displays the EZBook brand, navigation buttons, and theme toggle
+ * 
+ * @param {boolean} darkMode - Current theme state
+ * @param {function} onToggle - Callback to toggle dark mode
+ * @param {function} onSignUp - Callback to navigate to signup
+ * @param {function} onHome - Callback to navigate to home
+ */
 function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
   return (
     <nav className="navbar">
@@ -36,6 +60,14 @@ function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
   );
 }
 
+/**
+ * SignUpChoice Component - Choice between Customer and Provider signup
+ * Allows users to select their account type during the signup flow
+ * 
+ * @param {function} onSelectProvider - Callback when provider option is clicked
+ * @param {function} onSelectCustomer - Callback when customer option is clicked
+ * @param {function} onBack - Callback to return to previous page
+ */
 function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
   return (
     <div className="signup-page">
@@ -60,7 +92,15 @@ function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
   );
 }
 
+/**
+ * ProviderSignUpForm Component - Signup form for service providers
+ * Collects provider information including name, email, phone, business details
+ * 
+ * @param {function} onBack - Callback to return to signup choice page
+ * @param {function} onSuccess - Callback when form is successfully submitted
+ */
 function ProviderSignUpForm({ onBack, onSuccess }) {
+  // Form state containing provider details
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -69,8 +109,16 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
     businessType: '',
   });
 
+  /**
+   * Helper function to create input change handlers
+   * Returns a function that updates a specific form field
+   */
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  /**
+   * Handle form submission
+   * TODO: Wire this to the backend API for provider registration
+   */
   const handleSubmit = (e) => {
     e.preventDefault();
     // TODO: wire to backend
@@ -155,7 +203,19 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
   );
 }
 
+/**
+ * SearchBar Component - Service/provider search input
+ * Allows users to search for services or providers by keyword
+ * Triggers search on Enter key press or button click
+ * 
+ * @param {string} query - Current search query text
+ * @param {function} onChange - Callback when search input changes
+ * @param {function} onSearch - Callback to execute the search
+ */
 function SearchBar({ query, onChange, onSearch }) {
+  /**
+   * Handle Enter key press to trigger search
+   */
   const handleKey = (e) => {
     if (e.key === 'Enter') onSearch();
   };
@@ -180,6 +240,12 @@ function SearchBar({ query, onChange, onSearch }) {
   );
 }
 
+/**
+ * CategoryGrid Component - Browse services by category
+ * Displays all available service categories as clickable cards
+ * 
+ * @param {function} onCategoryClick - Callback when a category is selected
+ */
 function CategoryGrid({ onCategoryClick }) {
   return (
     <section className="section" id="services">
@@ -200,6 +266,12 @@ function CategoryGrid({ onCategoryClick }) {
   );
 }
 
+/**
+ * ProviderCard Component - Individual service provider listing
+ * Displays service details including provider name, service type, duration, and price
+ * 
+ * @param {object} service - Service object containing provider and service information
+ */
 function ProviderCard({ service }) {
   return (
     <div className="provider-card">
@@ -217,7 +289,19 @@ function ProviderCard({ service }) {
   );
 }
 
+/**
+ * ProvidersSection Component - Featured or filtered provider listings
+ * Shows search results or featured providers
+ * Filters services by search query across service name, type, and provider name
+ * 
+ * @param {array} services - Array of available services
+ * @param {string} searchQuery - Current search query to filter providers
+ */
 function ProvidersSection({ services, searchQuery }) {
+  /**
+   * Filter services based on the search query
+   * Performs case-insensitive search across multiple fields
+   */
   const filtered = services.filter((s) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -254,7 +338,12 @@ function ProvidersSection({ services, searchQuery }) {
   );
 }
 
+/**
+ * HowItWorks Component - Process explanation section
+ * Displays a 3-step guide to using the EZBook platform
+ */
 function HowItWorks() {
+  // Step-by-step process for using EZBook
   const steps = [
     { step: '1', title: 'Search', desc: 'Find services or providers near you.' },
     { step: '2', title: 'Book', desc: 'Pick a time that works for your schedule.' },
@@ -277,6 +366,9 @@ function HowItWorks() {
   );
 }
 
+/**
+ * Footer Component - Page footer with branding and copyright
+ */
 function Footer() {
   return (
     <footer className="footer">
@@ -288,14 +380,40 @@ function Footer() {
   );
 }
 
+/**
+ * App Component - Main application controller
+ * Manages:
+ * - Navigation between different pages/views
+ * - User authentication state
+ * - Service listings and search
+ * - Dark mode theme
+ */
 export default function App() {
+  /**
+   * State Management
+   */
+  // Current search input value (unfiltered)
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Last confirmed search query (used for filtering)
   const [activeQuery, setActiveQuery] = useState('');
+  
+  // Dark mode theme toggle
   const [darkMode, setDarkMode] = useState(false);
-  const [page, setPage] = useState('home'); // 'home' | 'signup' | 'provider-form' | 'provider-dashboard'
+  
+  // Current page/view: 'home' | 'signup' | 'provider-form' | 'provider-dashboard'
+  const [page, setPage] = useState('home');
+  
+  // Authenticated provider data (null if no provider is logged in)
   const [providerData, setProviderData] = useState(null);
+  
+  // List of all services offered by providers
   const [services, setServices] = useState([]);
 
+  /**
+   * Add a new service to the platform
+   * Combines service data with current provider's information
+   */
   const handleAddService = (service) => {
     setServices((prev) => [
       ...prev,
@@ -307,24 +425,39 @@ export default function App() {
     ]);
   };
 
+  /**
+   * Toggle dark mode and update document theme attribute
+   */
   const toggleDark = () => {
     const next = !darkMode;
     setDarkMode(next);
     document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
   };
 
+  /**
+   * Execute search and scroll to results section
+   */
   const handleSearch = () => {
     setActiveQuery(searchQuery.trim());
     document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  /**
+   * Handle category selection
+   * Sets search query and scrolls to provider results
+   */
   const handleCategoryClick = (label) => {
     setSearchQuery(label);
     setActiveQuery(label);
     document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  /**
+   * Render the appropriate view based on current page state
+   * Routes between home, signup choice, provider signup form, and provider dashboard
+   */
   const renderContent = () => {
+    // Show signup choice page
     if (page === 'signup') {
       return (
         <SignUpChoice
@@ -334,6 +467,7 @@ export default function App() {
         />
       );
     }
+    // Show provider signup form
     if (page === 'provider-form') {
       return (
         <ProviderSignUpForm
@@ -342,6 +476,7 @@ export default function App() {
         />
       );
     }
+    // Show provider dashboard for logged-in providers
     if (page === 'provider-dashboard') {
       return (
         <ProviderDashboard
@@ -352,6 +487,7 @@ export default function App() {
         />
       );
     }
+    // Default: Show home page with search and browsing
     return (
       <main>
         <section className="hero">
@@ -377,8 +513,16 @@ export default function App() {
     );
   };
 
+  /**
+   * Determine if currently on provider dashboard
+   * Used to conditionally show/hide navbar and footer
+   */
   const isDashboard = page === 'provider-dashboard';
 
+  /**
+   * Render main application layout
+   * Conditionally displays navbar and footer (hidden on dashboard)
+   */
   return (
     <div className="app">
       {!isDashboard && (
