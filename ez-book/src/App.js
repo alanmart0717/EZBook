@@ -14,16 +14,16 @@ const SERVICE_CATEGORIES = [
 // TODO: Replace with real provider data fetched from the backend
 const FEATURED_PROVIDERS = [];
 
-function Navbar({ darkMode, onToggle }) {
+function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
-        <span className="brand">EZ<span className="brand-accent">Book</span></span>
+        <span className="brand" onClick={onHome} style={{ cursor: 'pointer' }}>
+          EZ<span className="brand-accent">Book</span>
+        </span>
         <div className="nav-links">
-          <a href="#services">Services</a>
-          <a href="#providers">Providers</a>
           <button className="btn-outline">Log In</button>
-          <button className="btn-primary">Sign Up</button>
+          <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
           <button
             className="theme-toggle"
             onClick={onToggle}
@@ -34,6 +34,125 @@ function Navbar({ darkMode, onToggle }) {
         </div>
       </div>
     </nav>
+  );
+}
+
+function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
+  return (
+    <div className="signup-page">
+      <div className="signup-container">
+        <button className="back-btn" onClick={onBack}>← Back</button>
+        <h1 className="signup-title">Join EZBook</h1>
+        <p className="signup-subtitle">How would you like to sign up?</p>
+        <div className="signup-choice-grid">
+          <button className="choice-card" onClick={onSelectCustomer}>
+            <span className="choice-icon">👤</span>
+            <h2 className="choice-title">Customer</h2>
+            <p className="choice-desc">Book services from trusted local providers.</p>
+          </button>
+          <button className="choice-card" onClick={onSelectProvider}>
+            <span className="choice-icon">🏢</span>
+            <h2 className="choice-title">Provider</h2>
+            <p className="choice-desc">List your services and grow your business.</p>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProviderSignUpForm({ onBack }) {
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    businessName: '',
+    businessType: '',
+  });
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // TODO: wire to backend
+    console.log('Provider signup:', form);
+  };
+
+  return (
+    <div className="signup-page">
+      <div className="signup-container signup-container--form">
+        <button className="back-btn" onClick={onBack}>← Back</button>
+        <h1 className="signup-title">Provider Sign Up</h1>
+        <p className="signup-subtitle">Tell us about yourself and your business.</p>
+        <form className="signup-form" onSubmit={handleSubmit}>
+          <label className="form-label">
+            Name of Provider
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Your full name"
+              value={form.name}
+              onChange={set('name')}
+              required
+            />
+          </label>
+          <div className="form-row">
+            <label className="form-label">
+              Email
+              <input
+                className="form-input"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={set('email')}
+                required
+              />
+            </label>
+            <label className="form-label">
+              Phone Number
+              <input
+                className="form-input"
+                type="tel"
+                placeholder="(555) 000-0000"
+                value={form.phone}
+                onChange={set('phone')}
+                required
+              />
+            </label>
+          </div>
+          <label className="form-label">
+            Business Name
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Your business name"
+              value={form.businessName}
+              onChange={set('businessName')}
+              required
+            />
+          </label>
+          <label className="form-label">
+            Type of Business
+            <select
+              className="form-input form-select"
+              value={form.businessType}
+              onChange={set('businessType')}
+              required
+            >
+              <option value="" disabled>Select a category</option>
+              {SERVICE_CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.label}>
+                  {cat.icon} {cat.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn-primary form-submit">
+            Create Provider Account
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -174,6 +293,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
+  const [page, setPage] = useState('home'); // 'home' | 'signup' | 'provider-form'
 
   const toggleDark = () => {
     const next = !darkMode;
@@ -192,12 +312,21 @@ export default function App() {
     document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  return (
-    <div className="app">
-      <Navbar darkMode={darkMode} onToggle={toggleDark} />
-
+  const renderContent = () => {
+    if (page === 'signup') {
+      return (
+        <SignUpChoice
+          onSelectProvider={() => setPage('provider-form')}
+          onSelectCustomer={() => {}}
+          onBack={() => setPage('home')}
+        />
+      );
+    }
+    if (page === 'provider-form') {
+      return <ProviderSignUpForm onBack={() => setPage('signup')} />;
+    }
+    return (
       <main>
-        {/* Hero */}
         <section className="hero">
           <div className="hero-content">
             <h1 className="hero-title">
@@ -214,12 +343,22 @@ export default function App() {
             />
           </div>
         </section>
-
         <CategoryGrid onCategoryClick={handleCategoryClick} />
         <HowItWorks />
         <ProvidersSection searchQuery={activeQuery} />
       </main>
+    );
+  };
 
+  return (
+    <div className="app">
+      <Navbar
+        darkMode={darkMode}
+        onToggle={toggleDark}
+        onSignUp={() => setPage('signup')}
+        onHome={() => setPage('home')}
+      />
+      {renderContent()}
       <Footer />
     </div>
   );
