@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import ProviderDashboard from './ProviderDashboard';
 
 // Placeholder categories — swap with real API data when providers are integrated
 const SERVICE_CATEGORIES = [
@@ -61,7 +62,7 @@ function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
   );
 }
 
-function ProviderSignUpForm({ onBack }) {
+function ProviderSignUpForm({ onBack, onSuccess }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -75,7 +76,7 @@ function ProviderSignUpForm({ onBack }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     // TODO: wire to backend
-    console.log('Provider signup:', form);
+    onSuccess(form);
   };
 
   return (
@@ -293,7 +294,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
-  const [page, setPage] = useState('home'); // 'home' | 'signup' | 'provider-form'
+  const [page, setPage] = useState('home'); // 'home' | 'signup' | 'provider-form' | 'provider-dashboard'
+  const [providerData, setProviderData] = useState(null);
 
   const toggleDark = () => {
     const next = !darkMode;
@@ -323,7 +325,20 @@ export default function App() {
       );
     }
     if (page === 'provider-form') {
-      return <ProviderSignUpForm onBack={() => setPage('signup')} />;
+      return (
+        <ProviderSignUpForm
+          onBack={() => setPage('signup')}
+          onSuccess={(data) => { setProviderData(data); setPage('provider-dashboard'); }}
+        />
+      );
+    }
+    if (page === 'provider-dashboard') {
+      return (
+        <ProviderDashboard
+          provider={providerData}
+          onLogout={() => { setProviderData(null); setPage('home'); }}
+        />
+      );
     }
     return (
       <main>
@@ -350,16 +365,20 @@ export default function App() {
     );
   };
 
+  const isDashboard = page === 'provider-dashboard';
+
   return (
     <div className="app">
-      <Navbar
-        darkMode={darkMode}
-        onToggle={toggleDark}
-        onSignUp={() => setPage('signup')}
-        onHome={() => setPage('home')}
-      />
+      {!isDashboard && (
+        <Navbar
+          darkMode={darkMode}
+          onToggle={toggleDark}
+          onSignUp={() => setPage('signup')}
+          onHome={() => setPage('home')}
+        />
+      )}
       {renderContent()}
-      <Footer />
+      {!isDashboard && <Footer />}
     </div>
   );
 }
