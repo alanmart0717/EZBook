@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './ProviderDashboard.css';
 
+//Backend Information
 const NAV_ITEMS = [
   { id: 'overview',  label: 'Overview',    icon: '🏠' },
   { id: 'bookings',  label: 'Bookings',    icon: '📅' },
@@ -28,7 +29,99 @@ function StatCard({ stat }) {
   );
 }
 
-function OverviewSection({ provider }) {
+function AddServiceModal({ onClose, onUpload }) {
+  const [form, setForm] = useState({
+    serviceType: '',
+    serviceName: '',
+    duration: '',
+    price: '',
+  });
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpload({
+      id: Date.now(),
+      serviceType: form.serviceType,
+      serviceName: form.serviceName,
+      duration: parseInt(form.duration, 10),
+      price: parseFloat(form.price),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">Add a Service</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form className="signup-form" onSubmit={handleSubmit}>
+          <label className="form-label">
+            Type of Service
+            <input
+              className="form-input"
+              type="text"
+              placeholder="e.g. Hair & Beauty"
+              value={form.serviceType}
+              onChange={set('serviceType')}
+              required
+            />
+          </label>
+          <label className="form-label">
+            Service Name
+            <input
+              className="form-input"
+              type="text"
+              placeholder="e.g. Men's Haircut"
+              value={form.serviceName}
+              onChange={set('serviceName')}
+              required
+            />
+          </label>
+          <div className="form-row">
+            <label className="form-label">
+              Duration (minutes)
+              <input
+                className="form-input"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="e.g. 30"
+                value={form.duration}
+                onChange={set('duration')}
+                required
+              />
+            </label>
+            <label className="form-label">
+              Price ($)
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 25.00"
+                value={form.price}
+                onChange={set('price')}
+                required
+              />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function OverviewSection({ provider, onAddService }) {
+  const [showModal, setShowModal] = useState(false);
+
   return (
     <div className="dash-section">
       <div className="dash-welcome">
@@ -62,12 +155,16 @@ function OverviewSection({ provider }) {
         <div className="dash-card dash-card--sidebar">
           <h3 className="dash-card-title">Quick Actions</h3>
           <div className="dash-actions">
-            <button className="btn-primary dash-action-btn">+ Add Service</button>
+            <button className="btn-primary dash-action-btn" onClick={() => setShowModal(true)}>+ Add Service</button>
             <button className="btn-outline dash-action-btn">Share Profile</button>
             <button className="btn-outline dash-action-btn">View Schedule</button>
           </div>
         </div>
       </div>
+
+      {showModal && (
+        <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} />
+      )}
     </div>
   );
 }
@@ -102,24 +199,47 @@ function BookingsSection() {
   );
 }
 
-function ServicesSection() {
+function ServicesSection({ services, onAddService }) {
+  const [showModal, setShowModal] = useState(false);
+
   return (
     <div className="dash-section">
       <div className="dash-section-header">
         <h2 className="dash-section-heading">My Services</h2>
-        <button className="btn-primary">+ Add Service</button>
+        <button className="btn-primary" onClick={() => setShowModal(true)}>+ Add Service</button>
       </div>
 
-      <div className="dash-card">
-        <div className="dash-empty">
-          <span>🛠️</span>
-          <p>No services listed yet. Add your first service to start accepting bookings.</p>
+      {services.length === 0 ? (
+        <div className="dash-card">
+          <div className="dash-empty">
+            <span>🛠️</span>
+            <p>No services listed yet. Add your first service to start accepting bookings.</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="service-list">
+          {services.map((s) => (
+            <div key={s.id} className="dash-card service-item">
+              <div className="service-item-info">
+                <h3 className="service-item-name">{s.serviceName}</h3>
+                <p className="service-item-type">{s.serviceType}</p>
+              </div>
+              <div className="service-item-meta">
+                <span className="service-item-duration">⏱ {s.duration} min</span>
+                <span className="service-item-price">${Number(s.price).toFixed(2)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} />
+      )}
     </div>
   );
 }
-
+//TODO backend
 function ProfileSection({ provider }) {
   const [form, setForm] = useState({
     name:         provider?.name         ?? '',
@@ -182,15 +302,15 @@ function ProfileSection({ provider }) {
   );
 }
 
-export default function ProviderDashboard({ provider, onLogout }) {
+export default function ProviderDashboard({ provider, onLogout, services, onAddService }) {
   const [activeSection, setActiveSection] = useState('overview');
 
   const renderSection = () => {
     switch (activeSection) {
       case 'bookings': return <BookingsSection />;
-      case 'services': return <ServicesSection />;
+      case 'services': return <ServicesSection services={services} onAddService={onAddService} />;
       case 'profile':  return <ProfileSection provider={provider} />;
-      default:         return <OverviewSection provider={provider} />;
+      default:         return <OverviewSection provider={provider} onAddService={onAddService} />;
     }
   };
 

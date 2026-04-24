@@ -12,8 +12,6 @@ const SERVICE_CATEGORIES = [
   { id: 6, label: 'Pet Care', icon: '🐾' },
 ];
 
-// TODO: Replace with real provider data fetched from the backend
-const FEATURED_PROVIDERS = [];
 
 function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
   return (
@@ -202,16 +200,16 @@ function CategoryGrid({ onCategoryClick }) {
   );
 }
 
-function ProviderCard({ provider }) {
+function ProviderCard({ service }) {
   return (
     <div className="provider-card">
-      <div className="provider-avatar">{provider.name?.[0] ?? '?'}</div>
+      <div className="provider-avatar">{service.providerName?.[0] ?? '?'}</div>
       <div className="provider-info">
-        <h3 className="provider-name">{provider.name}</h3>
-        <p className="provider-service">{provider.service}</p>
+        <h3 className="provider-name">{service.serviceName}</h3>
+        <p className="provider-service">{service.serviceType} · {service.providerName}</p>
         <div className="provider-meta">
-          <span className="provider-rating">★ {provider.rating}</span>
-          <span className="provider-location">{provider.location}</span>
+          <span className="provider-rating">⏱ {service.duration} min</span>
+          <span className="provider-location">${Number(service.price).toFixed(2)}</span>
         </div>
       </div>
       <button className="btn-primary provider-btn">Book</button>
@@ -219,14 +217,14 @@ function ProviderCard({ provider }) {
   );
 }
 
-function ProvidersSection({ searchQuery }) {
-  const filtered = FEATURED_PROVIDERS.filter((p) => {
+function ProvidersSection({ services, searchQuery }) {
+  const filtered = services.filter((s) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      p.name?.toLowerCase().includes(q) ||
-      p.service?.toLowerCase().includes(q) ||
-      p.location?.toLowerCase().includes(q)
+      s.serviceName?.toLowerCase().includes(q) ||
+      s.serviceType?.toLowerCase().includes(q) ||
+      s.providerName?.toLowerCase().includes(q)
     );
   });
 
@@ -238,8 +236,8 @@ function ProvidersSection({ searchQuery }) {
 
       {filtered.length > 0 ? (
         <div className="provider-list">
-          {filtered.map((p) => (
-            <ProviderCard key={p.id} provider={p} />
+          {filtered.map((s) => (
+            <ProviderCard key={s.id} service={s} />
           ))}
         </div>
       ) : (
@@ -296,6 +294,18 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [page, setPage] = useState('home'); // 'home' | 'signup' | 'provider-form' | 'provider-dashboard'
   const [providerData, setProviderData] = useState(null);
+  const [services, setServices] = useState([]);
+
+  const handleAddService = (service) => {
+    setServices((prev) => [
+      ...prev,
+      {
+        ...service,
+        providerName: providerData?.name ?? 'Unknown',
+        businessName: providerData?.businessName ?? '',
+      },
+    ]);
+  };
 
   const toggleDark = () => {
     const next = !darkMode;
@@ -337,6 +347,8 @@ export default function App() {
         <ProviderDashboard
           provider={providerData}
           onLogout={() => { setProviderData(null); setPage('home'); }}
+          services={services}
+          onAddService={handleAddService}
         />
       );
     }
@@ -360,7 +372,7 @@ export default function App() {
         </section>
         <CategoryGrid onCategoryClick={handleCategoryClick} />
         <HowItWorks />
-        <ProvidersSection searchQuery={activeQuery} />
+        <ProvidersSection services={services} searchQuery={activeQuery} />
       </main>
     );
   };
