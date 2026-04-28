@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config;
+require("dotenv").config();
 
 const app = express();
 
@@ -12,17 +12,21 @@ app.use(express.json());
 const authRoutes = require("./routes/auth.routes");
 app.use("/api/auth", authRoutes);
 
-//Provider profile routes
+// Provider profile routes
 const providerProfileRoutes = require("./routes/provider.profile.routes");
 app.use("/api/provider/profile", providerProfileRoutes);
 
-//Provider availability routes
+// Provider availability routes
 const providerAvailabilityRoutes = require("./routes/provider.availability.routes");
 app.use("/api/provider/availability", providerAvailabilityRoutes);
 
-//Service routes
+// Service routes
 const serviceRoutes = require("./routes/service.routes");
 app.use("/api/services", serviceRoutes);
+
+// Appointment routes
+const appointmentRoutes = require("./routes/appointments.routes");
+app.use("/api/appointments", appointmentRoutes);
 
 // Health check
 app.get("/", (req, res) => {

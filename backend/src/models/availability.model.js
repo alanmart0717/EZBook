@@ -8,6 +8,10 @@ const createAvailability = async (
     endTime,
     isAvailable = true
 ) => {
+
+    // Normalize ENUM value BEFORE DB insert
+    const normalizedDay = day.toLowerCase().trim();
+
     const query = `
         INSERT INTO provider_availability (
             provider_profile_id,
@@ -22,7 +26,7 @@ const createAvailability = async (
 
     const values = [
         providerProfileId,
-        day,
+        normalizedDay,
         startTime,
         endTime,
         isAvailable
@@ -34,6 +38,7 @@ const createAvailability = async (
 
 // Get all availability for a provider
 const getAvailabilityByProviderId = async (providerProfileId) => {
+
     const query = `
         SELECT *
         FROM provider_availability
@@ -45,8 +50,9 @@ const getAvailabilityByProviderId = async (providerProfileId) => {
     return result.rows;
 };
 
-// Optional: delete slot
+// Delete availability slot
 const deleteAvailability = async (availabilityId) => {
+
     const query = `
         DELETE FROM provider_availability
         WHERE availability_id = $1
@@ -57,8 +63,51 @@ const deleteAvailability = async (availabilityId) => {
     return result.rows[0];
 };
 
+// Check if provider is available
+const checkAvailability = async (
+    providerProfileId,
+    appointmentDate,
+    startTime,
+    endTime
+) => {
+
+    const days = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+    ];
+
+    const dayOfWeek = days[new Date(appointmentDate).getDay()];
+
+    const query = `
+        SELECT *
+        FROM provider_availability
+        WHERE provider_profile_id = $1
+        AND day = $2
+        AND is_available = true
+        AND start_time <= $3
+        AND end_time >= $4
+    `;
+
+    const values = [
+        providerProfileId,
+        dayOfWeek,
+        startTime,
+        endTime
+    ];
+
+    const result = await db.query(query, values);
+
+    return result.rows.length > 0;
+};
+
 module.exports = {
     createAvailability,
     getAvailabilityByProviderId,
-    deleteAvailability
+    deleteAvailability,
+    checkAvailability
 };
