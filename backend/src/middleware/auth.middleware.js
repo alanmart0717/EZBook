@@ -5,14 +5,13 @@ const authenticateUser = (req, res, next) => {
         // Get Authorization header
         const authHeader = req.headers.authorization;
 
-        if(!authHeader) {
+        if (!authHeader) {
             return res.status(401).json({
-                error:"Access denied. No token provided."
+                error: "Access denied. No token provided."
             });
         }
 
-        // Expected format:
-        // Authorization: Bearer TOKEN
+        // Expected format: Bearer TOKEN
         const token = authHeader.split(" ")[1];
 
         if (!token) {
@@ -22,17 +21,16 @@ const authenticateUser = (req, res, next) => {
         }
 
         // Verify token
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        );
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Save decoded user info to request
-        req.user = decoded;
+        // Normalize user object (IMPORTANT FIX)
+        req.user = {
+            userId: decoded.userId || decoded.user_id || decoded.id,
+            role: decoded.role
+        };
 
         next();
-    }
-    catch (error) {
+    } catch (error) {
         return res.status(401).json({
             error: "Invalid or expired token."
         });

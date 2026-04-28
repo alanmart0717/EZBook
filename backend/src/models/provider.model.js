@@ -44,11 +44,11 @@ const getProviderByUserId = async (userId) => {
     return result.rows[0];
 };
 
-// Get provider by provider_profile_id (useful later)
+// Get provider by provider_profile_id
 const getProviderById = async (providerProfileId) => {
     const query = `
         SELECT *
-        FROM provider_profilesok
+        FROM provider_profiles
         WHERE provider_profile_id = $1
     `;
 

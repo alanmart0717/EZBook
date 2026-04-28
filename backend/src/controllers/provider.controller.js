@@ -1,11 +1,11 @@
-const ProviderModel = require("../models/provider.model");
+const ProviderService = require("../services/provider.service.js");
 
 // Create provider profile
 const createProfile = async (req, res) => {
     try {
         const userId = req.user.userId;
 
-        const profile = await ProviderModel.createProviderProfile(
+        const profile = await ProviderService.createProviderProfile(
             userId,
             req.body
         );
@@ -25,7 +25,9 @@ const createProfile = async (req, res) => {
 // Get my profile
 const getMyProfile = async (req, res) => {
     try {
-        const profile = await ProviderModel.getProviderByUserId(req.user.userId);
+        const profile = await ProviderService.getMyProviderProfile(
+            req.user.userId
+        );
 
         res.status(200).json({
             data: profile

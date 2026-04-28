@@ -1,6 +1,7 @@
 const Provider = require("../models/provider.model");
 const ServiceService = require("../services/service.service");
 
+// Create service
 const createService = async (req, res) => {
     try {
         const provider = await Provider.getProviderByUserId(req.user.userId);
@@ -12,8 +13,8 @@ const createService = async (req, res) => {
         }
 
         const service = await ServiceService.createService(
-            req.body,
-            provider.provider_profile_id
+            provider.provider_profile_id, // ✅ FIXED ORDER
+            req.body
         );
 
         res.status(201).json({

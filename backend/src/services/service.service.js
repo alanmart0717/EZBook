@@ -1,19 +1,20 @@
 const Service = require("../models/service.model");
 
 // Create service
-const createService = async (DataTransfer, providerProfileId) => {
+const createService = async (providerProfileId, data) => {
+
     const {
-        serviceName,
+        service_name,
         description,
-        durationMinutes,
+        duration_minutes,
         price
     } = data;
 
     return await Service.createService(
         providerProfileId,
-        serviceName,
+        service_name,
         description,
-        durationMinutes,
+        duration_minutes,
         price
     );
 };
@@ -31,5 +32,5 @@ const getMyServices = async (providerProfileId) => {
 module.exports = {
     createService,
     getAllServices,
-    getMyServices,
-}
+    getMyServices
+};

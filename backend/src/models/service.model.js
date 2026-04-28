@@ -29,10 +29,10 @@ const createService = async (
     ];
 
     const result = await db.query(query, values);
-    return result.row[0];
+    return result.rows[0];
 };
 
-// Get all active services (IMPORTANT)
+// Get all active services
 const getAllServices = async () => {
     const query = `
         SELECT * 
@@ -46,7 +46,7 @@ const getAllServices = async () => {
 };
 
 // Get services by provider
-const getServicesByProvider = async (providerProfiledID) => {
+const getServicesByProvider = async (providerProfileId) => {
     const query = `
         SELECT *
         FROM services
@@ -54,11 +54,24 @@ const getServicesByProvider = async (providerProfiledID) => {
     `;
 
     const result = await db.query(query, [providerProfileId]);
-     return result.row;
+    return result.rows;
+};
+
+// Get single service by ID (USED BY APPOINTMENTS)
+const getServiceById = async (serviceId) => {
+    const query = `
+        SELECT *
+        FROM services
+        WHERE service_id = $1
+    `;
+
+    const result = await db.query(query, [serviceId]);
+    return result.rows[0];
 };
 
 module.exports = {
     createService,
     getAllServices,
-    getServicesByProvider
+    getServicesByProvider,
+    getServiceById
 };
