@@ -49,6 +49,26 @@ const getMyAvailability = async (req, res) => {
     }
 };
 
+// Get availability by provider profile id
+const getProviderAvailability = async (req, res) => {
+    try {
+        const { providerProfileId } = req.params;
+
+        const slots = await AvailabilityService.getMyAvailability(
+            providerProfileId
+        );
+
+        res.status(200).json({
+            data: slots
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            error: err.message
+        });
+    }
+};
+
 // Delete availability slot
 const deleteAvailability = async (req, res) => {
     try {
@@ -73,5 +93,6 @@ const deleteAvailability = async (req, res) => {
 module.exports = {
     addAvailability,
     getMyAvailability,
+    getProviderAvailability,
     deleteAvailability
 };

@@ -450,6 +450,11 @@ a { text-decoration: none; color: inherit; }
   gap: 16px;
 }
 .form-submit { width: 100%; padding: 13px; font-size: 1rem; margin-top: 4px; }
+.form-error {
+  color: #dc2626;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
 
 /* ── Responsive ── */
 @media (max-width: 600px) {

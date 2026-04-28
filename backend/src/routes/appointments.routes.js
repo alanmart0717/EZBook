@@ -12,4 +12,11 @@ router.post(
     AppointmentController.createAppointment
 );
 
+// Get my provider bookings
+router.get(
+    "/provider/me",
+    authenticateUser,
+    AppointmentController.getMyProviderAppointments
+);
+
 module.exports = router;

@@ -22,6 +22,12 @@ router.get(
     AvailabilityController.getMyAvailability
 );
 
+// Get availability by provider profile id
+router.get(
+    "/provider/:providerProfileId",
+    AvailabilityController.getProviderAvailability
+);
+
 // Delete availability slot
 router.delete(
     "/:availabilityId",

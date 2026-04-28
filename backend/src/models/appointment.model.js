@@ -72,10 +72,16 @@ const checkAppointmentConflict = async (
 // Get appointments for provider
 const getAppointmentsByProvider = async (providerProfileId) => {
     const query = `
-        SELECT *
-        FROM appointments
-        WHERE provider_profile_id = $1
-        ORDER BY appointment_date, start_time
+        SELECT 
+            a.*,
+            s.service_name,
+            u.first_name,
+            u.last_name
+        FROM appointments a
+        JOIN services s ON a.service_id = s.service_id
+        JOIN users u ON a.customer_id = u.user_id
+        WHERE a.provider_profile_id = $1
+        ORDER BY a.appointment_date, a.start_time
     `;
 
     const result = await db.query(query, [providerProfileId]);

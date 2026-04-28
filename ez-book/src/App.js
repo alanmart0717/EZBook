@@ -4,20 +4,26 @@
  * This is the primary entry point for the EZBook application.
  * It manages:
  * - User authentication flow (customer vs. provider signup)
+ * - Provider login flow
  * - Service browsing and search functionality
  * - Dark mode toggle
  * - Provider dashboard access
+ * - Booking flow
  * - Navigation between different app views
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import ProviderDashboard from './ProviderDashboard';
 
 /**
+ * Backend API base URL
+ * Backend server runs on port 5000 by default
+ */
+const API_BASE_URL = 'http://localhost:5000';
+
+/**
  * Service categories displayed in the browsing interface
- * TODO: Replace with real API data once providers are integrated
- * Each category includes an ID, display label, and emoji icon
  */
 const SERVICE_CATEGORIES = [
   { id: 1, label: 'Hair & Beauty', icon: '✂️' },
@@ -30,14 +36,8 @@ const SERVICE_CATEGORIES = [
 
 /**
  * Navbar Component - Top navigation bar
- * Displays the EZBook brand, navigation buttons, and theme toggle
- * 
- * @param {boolean} darkMode - Current theme state
- * @param {function} onToggle - Callback to toggle dark mode
- * @param {function} onSignUp - Callback to navigate to signup
- * @param {function} onHome - Callback to navigate to home
  */
-function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
+function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
@@ -45,7 +45,7 @@ function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
           EZ<span className="brand-accent">Book</span>
         </span>
         <div className="nav-links">
-          <button className="btn-outline">Log In</button>
+          <button className="btn-outline" onClick={onLogin}>Log In</button>
           <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
           <button
             className="theme-toggle"
@@ -61,12 +61,148 @@ function Navbar({ darkMode, onToggle, onSignUp, onHome }) {
 }
 
 /**
+ * LoginForm Component - Existing user login form
+ */
+function LoginForm({ onBack, onSuccess }) {
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+        }),
+      });
+
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok) {
+        throw new Error(loginData.error || 'Login failed');
+      }
+
+      const token = loginData.data.token;
+      const user = loginData.data.user;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      if (user.role === 'provider') {
+        const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const profileData = await profileRes.json();
+
+        if (!profileRes.ok) {
+          throw new Error(profileData.error || 'Could not load provider profile');
+        }
+
+        const profile = profileData.data;
+
+        onSuccess({
+          name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+          email: user.email,
+          phone: profile?.phone_number ?? '',
+          businessName: profile?.business_name ?? profile?.businessName ?? '',
+          businessType: profile?.service_category ?? profile?.serviceCategory ?? '',
+          location: profile?.location ?? '',
+          bio: profile?.bio ?? '',
+          token,
+          user,
+          profile,
+        });
+
+        return;
+      }
+
+      onSuccess({
+        name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+        email: user.email,
+        token,
+        user,
+      });
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="signup-page">
+      <div className="signup-container signup-container--form">
+        <button className="back-btn" onClick={onBack}>← Back</button>
+
+        <h1 className="signup-title">Log In</h1>
+        <p className="signup-subtitle">Welcome back to EZBook.</p>
+
+        <form className="signup-form" onSubmit={handleSubmit}>
+          <label className="form-label">
+            Email
+            <input
+              className="form-input"
+              type="email"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={set('email')}
+              required
+            />
+          </label>
+
+          <label className="form-label">
+            Password
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Enter your password"
+              value={form.password}
+              onChange={set('password')}
+              required
+            />
+          </label>
+
+          {error && (
+            <p className="form-error">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="btn-primary form-submit" disabled={loading}>
+            {loading ? 'Logging In...' : 'Log In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
  * SignUpChoice Component - Choice between Customer and Provider signup
- * Allows users to select their account type during the signup flow
- * 
- * @param {function} onSelectProvider - Callback when provider option is clicked
- * @param {function} onSelectCustomer - Callback when customer option is clicked
- * @param {function} onBack - Callback to return to previous page
  */
 function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
   return (
@@ -75,12 +211,14 @@ function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
         <button className="back-btn" onClick={onBack}>← Back</button>
         <h1 className="signup-title">Join EZBook</h1>
         <p className="signup-subtitle">How would you like to sign up?</p>
+
         <div className="signup-choice-grid">
           <button className="choice-card" onClick={onSelectCustomer}>
             <span className="choice-icon">👤</span>
             <h2 className="choice-title">Customer</h2>
             <p className="choice-desc">Book services from trusted local providers.</p>
           </button>
+
           <button className="choice-card" onClick={onSelectProvider}>
             <span className="choice-icon">🏢</span>
             <h2 className="choice-title">Provider</h2>
@@ -91,42 +229,96 @@ function SignUpChoice({ onSelectProvider, onSelectCustomer, onBack }) {
     </div>
   );
 }
- //TODO backend
-function ProviderSignUpForm({ onBack, onSuccess }) {
-  // Form state containing provider details
+
+/**
+ * CustomerSignUpForm Component - Customer registration form
+ */
+function CustomerSignUpForm({ onBack, onSuccess }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    password: '',
     phone: '',
-    businessName: '',
-    businessType: '',
   });
 
-  /**
-   * Helper function to create input change handlers
-   * Returns a function that updates a specific form field
-   */
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  /**
-   * Handle form submission
-   * TODO: Wire this to the backend API for provider registration
-   */
-  const handleSubmit = (e) => {
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+  };
+
+  const getNameParts = (fullName) => {
+    const parts = fullName.trim().split(' ');
+    const firstName = parts[0] || '';
+    const lastName = parts.slice(1).join(' ') || '';
+
+    return { firstName, lastName };
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: wire to backend
-    onSuccess(form);
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const { firstName, lastName } = getNameParts(form.name);
+
+      const registerRes = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email: form.email,
+          password: form.password,
+          phoneNumber: form.phone,
+          role: 'customer',
+        }),
+      });
+
+      const registerData = await registerRes.json();
+
+      if (!registerRes.ok) {
+        throw new Error(registerData.error || 'Customer registration failed');
+      }
+
+      const token = registerData.data.token;
+      const user = registerData.data.user;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      onSuccess({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        token,
+        user,
+      });
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="signup-page">
       <div className="signup-container signup-container--form">
         <button className="back-btn" onClick={onBack}>← Back</button>
-        <h1 className="signup-title">Provider Sign Up</h1>
-        <p className="signup-subtitle">Tell us about yourself and your business.</p>
+
+        <h1 className="signup-title">Customer Sign Up</h1>
+        <p className="signup-subtitle">Create an account to book local services.</p>
+
         <form className="signup-form" onSubmit={handleSubmit}>
           <label className="form-label">
-            Name of Provider
+            Name
             <input
               className="form-input"
               type="text"
@@ -136,6 +328,7 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
               required
             />
           </label>
+
           <div className="form-row">
             <label className="form-label">
               Email
@@ -148,6 +341,7 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
                 required
               />
             </label>
+
             <label className="form-label">
               Phone Number
               <input
@@ -160,6 +354,200 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
               />
             </label>
           </div>
+
+          <label className="form-label">
+            Password
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Create a password"
+              value={form.password}
+              onChange={set('password')}
+              required
+            />
+          </label>
+
+          {error && (
+            <p className="form-error">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="btn-primary form-submit" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Customer Account'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ProviderSignUpForm Component - Provider registration form
+ */
+function ProviderSignUpForm({ onBack, onSuccess }) {
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    businessName: '',
+    businessType: '',
+    location: '',
+    bio: '',
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+  };
+
+  const getNameParts = (fullName) => {
+    const parts = fullName.trim().split(' ');
+    const firstName = parts[0] || '';
+    const lastName = parts.slice(1).join(' ') || '';
+
+    return { firstName, lastName };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const { firstName, lastName } = getNameParts(form.name);
+
+      const registerRes = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email: form.email,
+          password: form.password,
+          phoneNumber: form.phone,
+          role: 'provider',
+        }),
+      });
+
+      const registerData = await registerRes.json();
+
+      if (!registerRes.ok) {
+        throw new Error(registerData.error || 'Provider registration failed');
+      }
+
+      const token = registerData.data.token;
+      const user = registerData.data.user;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          businessName: form.businessName,
+          bio: form.bio || 'New provider on EZBook',
+          serviceCategory: form.businessType,
+          location: form.location,
+        }),
+      });
+
+      const profileData = await profileRes.json();
+
+      if (!profileRes.ok) {
+        throw new Error(profileData.error || 'Provider profile creation failed');
+      }
+
+      onSuccess({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        businessName: form.businessName,
+        businessType: form.businessType,
+        location: form.location,
+        bio: form.bio,
+        token,
+        user,
+        profile: profileData.data,
+      });
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="signup-page">
+      <div className="signup-container signup-container--form">
+        <button className="back-btn" onClick={onBack}>← Back</button>
+
+        <h1 className="signup-title">Provider Sign Up</h1>
+        <p className="signup-subtitle">Tell us about yourself and your business.</p>
+
+        <form className="signup-form" onSubmit={handleSubmit}>
+          <label className="form-label">
+            Name of Provider
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Your full name"
+              value={form.name}
+              onChange={set('name')}
+              required
+            />
+          </label>
+
+          <div className="form-row">
+            <label className="form-label">
+              Email
+              <input
+                className="form-input"
+                type="email"
+                placeholder="you@example.com"
+                value={form.email}
+                onChange={set('email')}
+                required
+              />
+            </label>
+
+            <label className="form-label">
+              Phone Number
+              <input
+                className="form-input"
+                type="tel"
+                placeholder="(555) 000-0000"
+                value={form.phone}
+                onChange={set('phone')}
+                required
+              />
+            </label>
+          </div>
+
+          <label className="form-label">
+            Password
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Create a password"
+              value={form.password}
+              onChange={set('password')}
+              required
+            />
+          </label>
+
           <label className="form-label">
             Business Name
             <input
@@ -171,6 +559,7 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
               required
             />
           </label>
+
           <label className="form-label">
             Type of Business
             <select
@@ -187,8 +576,38 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
               ))}
             </select>
           </label>
-          <button type="submit" className="btn-primary form-submit">
-            Create Provider Account
+
+          <label className="form-label">
+            Location
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Example: Brooklyn, NY"
+              value={form.location}
+              onChange={set('location')}
+              required
+            />
+          </label>
+
+          <label className="form-label">
+            Bio
+            <textarea
+              className="form-input"
+              placeholder="Tell customers about your business"
+              value={form.bio}
+              onChange={set('bio')}
+              rows="3"
+            />
+          </label>
+
+          {error && (
+            <p className="form-error">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="btn-primary form-submit" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Provider Account'}
           </button>
         </form>
       </div>
@@ -197,18 +616,230 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
 }
 
 /**
- * SearchBar Component - Service/provider search input
- * Allows users to search for services or providers by keyword
- * Triggers search on Enter key press or button click
+ * BookingModal Component - Customer booking form
  * 
- * @param {string} query - Current search query text
- * @param {function} onChange - Callback when search input changes
- * @param {function} onSearch - Callback to execute the search
+ * Loads provider availability, allows the customer to choose an available day
+ * and time, then creates an appointment through the backend.
+ */
+function BookingModal({ service, onClose }) {
+  const [availability, setAvailability] = useState([]);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  /**
+   * Load availability for the selected service's provider
+   */
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/provider/availability/provider/${service.providerProfileId}`
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load availability');
+        }
+
+        setAvailability(data.data || []);
+
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (service?.providerProfileId) {
+      fetchAvailability();
+    }
+  }, [service]);
+
+  /**
+   * Convert a selected date into the same day name used by the backend
+   */
+  const getDayFromDate = (dateValue) => {
+    if (!dateValue) return '';
+
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+
+    const date = new Date(`${dateValue}T00:00:00`);
+    return days[date.getDay()];
+  };
+
+  /**
+   * Generate hourly time slots from provider availability
+   */
+  const getAvailableTimes = () => {
+    const selectedDay = getDayFromDate(selectedDate);
+
+    if (!selectedDay) return [];
+
+    const matchingSlots = availability.filter((slot) => slot.day === selectedDay);
+
+    const times = [];
+
+    matchingSlots.forEach((slot) => {
+      const startHour = parseInt(slot.start_time.split(':')[0], 10);
+      const endHour = parseInt(slot.end_time.split(':')[0], 10);
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        times.push(`${String(hour).padStart(2, '0')}:00:00`);
+      }
+    });
+
+    return times;
+  };
+
+  /**
+   * Submit selected booking to backend
+   */
+  const handleBook = async (e) => {
+    e.preventDefault();
+
+    setBookingLoading(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error('You must log in before booking');
+      }
+
+      if (!selectedDate || !selectedTime) {
+        throw new Error('Please select a date and time');
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/appointments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          provider_profile_id: service.providerProfileId,
+          service_id: service.serviceId,
+          appointment_date: selectedDate,
+          start_time: selectedTime,
+          notes: 'Booked from EZBook frontend',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Booking failed');
+      }
+
+      alert('Booking created successfully!');
+      onClose();
+
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const availableTimes = getAvailableTimes();
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">Book {service.serviceName}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <form className="signup-form" onSubmit={handleBook}>
+          <p className="signup-subtitle">
+            {service.serviceType} · ${Number(service.price).toFixed(2)} · {service.duration} min
+          </p>
+
+          <label className="form-label">
+            Appointment Date
+            <input
+              className="form-input"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setSelectedTime('');
+              }}
+              required
+            />
+          </label>
+
+          <label className="form-label">
+            Available Time
+            <select
+              className="form-input form-select"
+              value={selectedTime}
+              onChange={(e) => setSelectedTime(e.target.value)}
+              required
+              disabled={!selectedDate || loading}
+            >
+              <option value="">
+                {loading ? 'Loading times...' : 'Select a time'}
+              </option>
+
+              {availableTimes.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedDate && !loading && availableTimes.length === 0 && (
+            <p className="form-error">
+              No availability for this date.
+            </p>
+          )}
+
+          {error && (
+            <p className="form-error">
+              {error}
+            </p>
+          )}
+
+          <div className="modal-actions">
+            <button type="button" className="btn-outline" onClick={onClose}>
+              Cancel
+            </button>
+
+            <button type="submit" className="btn-primary" disabled={bookingLoading}>
+              {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SearchBar Component - Service/provider search input
  */
 function SearchBar({ query, onChange, onSearch }) {
-  /**
-   * Handle Enter key press to trigger search
-   */
   const handleKey = (e) => {
     if (e.key === 'Enter') onSearch();
   };
@@ -235,14 +866,12 @@ function SearchBar({ query, onChange, onSearch }) {
 
 /**
  * CategoryGrid Component - Browse services by category
- * Displays all available service categories as clickable cards
- * 
- * @param {function} onCategoryClick - Callback when a category is selected
  */
 function CategoryGrid({ onCategoryClick }) {
   return (
     <section className="section" id="services">
       <h2 className="section-title">Browse by Category</h2>
+
       <div className="category-grid">
         {SERVICE_CATEGORIES.map((cat) => (
           <button
@@ -261,43 +890,45 @@ function CategoryGrid({ onCategoryClick }) {
 
 /**
  * ProviderCard Component - Individual service provider listing
- * Displays service details including provider name, service type, duration, and price
- * 
- * @param {object} service - Service object containing provider and service information
  */
-function ProviderCard({ service }) {
+function ProviderCard({ service, onBook }) {
   return (
     <div className="provider-card">
       <div className="provider-avatar">{service.providerName?.[0] ?? '?'}</div>
+
       <div className="provider-info">
         <h3 className="provider-name">{service.serviceName}</h3>
-        <p className="provider-service">{service.serviceType} · {service.providerName}</p>
+        <p className="provider-service">
+          {service.serviceType} · {service.providerName}
+        </p>
+
         <div className="provider-meta">
           <span className="provider-rating">⏱ {service.duration} min</span>
-          <span className="provider-location">${Number(service.price).toFixed(2)}</span>
+          <span className="provider-location">
+            ${Number(service.price).toFixed(2)}
+          </span>
         </div>
       </div>
-      <button className="btn-primary provider-btn">Book</button>
+
+      <button
+        className="btn-primary provider-btn"
+        onClick={() => onBook(service)}
+      >
+        Book
+      </button>
     </div>
   );
 }
 
 /**
  * ProvidersSection Component - Featured or filtered provider listings
- * Shows search results or featured providers
- * Filters services by search query across service name, type, and provider name
- * 
- * @param {array} services - Array of available services
- * @param {string} searchQuery - Current search query to filter providers
  */
-function ProvidersSection({ services, searchQuery }) {
-  /**
-   * Filter services based on the search query
-   * Performs case-insensitive search across multiple fields
-   */
+function ProvidersSection({ services, searchQuery, onBook }) {
   const filtered = services.filter((s) => {
     if (!searchQuery) return true;
+
     const q = searchQuery.toLowerCase();
+
     return (
       s.serviceName?.toLowerCase().includes(q) ||
       s.serviceType?.toLowerCase().includes(q) ||
@@ -314,7 +945,7 @@ function ProvidersSection({ services, searchQuery }) {
       {filtered.length > 0 ? (
         <div className="provider-list">
           {filtered.map((s) => (
-            <ProviderCard key={s.id} service={s} />
+            <ProviderCard key={s.id} service={s} onBook={onBook} />
           ))}
         </div>
       ) : (
@@ -333,10 +964,8 @@ function ProvidersSection({ services, searchQuery }) {
 
 /**
  * HowItWorks Component - Process explanation section
- * Displays a 3-step guide to using the EZBook platform
  */
 function HowItWorks() {
-  // Step-by-step process for using EZBook
   const steps = [
     { step: '1', title: 'Search', desc: 'Find services or providers near you.' },
     { step: '2', title: 'Book', desc: 'Pick a time that works for your schedule.' },
@@ -346,6 +975,7 @@ function HowItWorks() {
   return (
     <section className="section">
       <h2 className="section-title">How It Works</h2>
+
       <div className="steps-grid">
         {steps.map((s) => (
           <div key={s.step} className="step-card">
@@ -367,7 +997,9 @@ function Footer() {
     <footer className="footer">
       <div className="footer-inner">
         <span className="brand">EZ<span className="brand-accent">Book</span></span>
-        <p className="footer-copy">© {new Date().getFullYear()} EZBook. All rights reserved.</p>
+        <p className="footer-copy">
+          © {new Date().getFullYear()} EZBook. All rights reserved.
+        </p>
       </div>
     </footer>
   );
@@ -375,37 +1007,111 @@ function Footer() {
 
 /**
  * App Component - Main application controller
- * Manages:
- * - Navigation between different pages/views
- * - User authentication state
- * - Service listings and search
- * - Dark mode theme
  */
 export default function App() {
   /**
    * State Management
    */
-  // Current search input value (unfiltered)
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Last confirmed search query (used for filtering)
   const [activeQuery, setActiveQuery] = useState('');
-  
-  // Dark mode theme toggle
   const [darkMode, setDarkMode] = useState(false);
-  
-  // Current page/view: 'home' | 'signup' | 'provider-form' | 'provider-dashboard'
   const [page, setPage] = useState('home');
-  
-  // Authenticated provider data (null if no provider is logged in)
   const [providerData, setProviderData] = useState(null);
-  
-  // List of all services offered by providers
   const [services, setServices] = useState([]);
+  const [selectedService, setSelectedService] = useState(null);
+
+  /**
+ * Restore logged-in user after page refresh
+ */
+useEffect(() => {
+  const restoreSession = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
+
+      if (!token || !savedUser) return;
+
+      const user = JSON.parse(savedUser);
+
+      if (user.role === 'provider') {
+        const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const profileData = await profileRes.json();
+
+        if (!profileRes.ok) {
+          throw new Error(profileData.error || 'Could not restore provider session');
+        }
+
+        const profile = profileData.data;
+
+        setProviderData({
+          name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+          email: user.email,
+          phone: user.phone_number ?? '',
+          businessName: profile?.business_name ?? '',
+          businessType: profile?.service_category ?? '',
+          location: profile?.location ?? '',
+          bio: profile?.bio ?? '',
+          token,
+          user,
+          profile,
+        });
+
+        setPage('provider-dashboard');
+      }
+
+    } catch (err) {
+      console.error('Session restore failed:', err);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+  };
+
+  restoreSession();
+}, []);
+
+  /**
+   * Load services from backend
+   */
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/services`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to fetch services');
+        }
+
+        const mappedServices = data.data.map((s) => ({
+          id: s.service_id,
+          serviceId: s.service_id,
+          providerProfileId: s.provider_profile_id,
+          serviceName: s.service_name,
+          serviceType: s.description,
+          duration: s.duration_minutes,
+          price: s.price,
+          providerName: s.provider_name || 'Provider',
+          businessName: s.business_name || '',
+        }));
+
+        setServices(mappedServices);
+
+      } catch (err) {
+        console.error('Error fetching services:', err);
+      }
+    };
+
+    fetchServices();
+  }, []);
 
   /**
    * Add a new service to the platform
-   * Combines service data with current provider's information
    */
   const handleAddService = (service) => {
     setServices((prev) => [
@@ -419,10 +1125,68 @@ export default function App() {
   };
 
   /**
+   *  Deletes a service from the platform
+   */
+  const handleDeleteService = async (serviceId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error('You are not logged in');
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/services/${serviceId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete service');
+      }
+
+      // Remove deleted service from frontend immediately
+      setServices((prev) =>
+        prev.filter((service) =>
+          service.id !== serviceId && service.serviceId !== serviceId
+        )
+      );
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  };
+
+  /**
+   * Handle successful login
+   */
+  const handleLoginSuccess = (data) => {
+    if (data.user?.role === 'provider') {
+      setProviderData(data);
+      setPage('provider-dashboard');
+    } else {
+      setPage('home');
+      alert('Customer login successful. Customer dashboard is coming soon.');
+    }
+  };
+
+  /**
+   * Handle booking button click
+   */
+  const handleBookClick = (service) => {
+    setSelectedService(service);
+  };
+
+  /**
    * Toggle dark mode and update document theme attribute
    */
   const toggleDark = () => {
     const next = !darkMode;
+
     setDarkMode(next);
     document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
   };
@@ -437,7 +1201,6 @@ export default function App() {
 
   /**
    * Handle category selection
-   * Sets search query and scrolls to provider results
    */
   const handleCategoryClick = (label) => {
     setSearchQuery(label);
@@ -447,40 +1210,70 @@ export default function App() {
 
   /**
    * Render the appropriate view based on current page state
-   * Routes between home, signup choice, provider signup form, and provider dashboard
    */
   const renderContent = () => {
-    // Show signup choice page
+    if (page === 'login') {
+      return (
+        <LoginForm
+          onBack={() => setPage('home')}
+          onSuccess={handleLoginSuccess}
+        />
+      );
+    }
+
     if (page === 'signup') {
       return (
         <SignUpChoice
           onSelectProvider={() => setPage('provider-form')}
-          onSelectCustomer={() => {}}
+          onSelectCustomer={() => setPage('customer-form')}
           onBack={() => setPage('home')}
         />
       );
     }
-    // Show provider signup form
+
+    if (page === 'customer-form') {
+      return (
+        <CustomerSignUpForm
+          onBack={() => setPage('signup')}
+          onSuccess={() => {
+            setPage('home');
+            alert('Customer account created successfully. You can now book services.');
+          }}
+        />
+      );
+    }
+
     if (page === 'provider-form') {
       return (
         <ProviderSignUpForm
           onBack={() => setPage('signup')}
-          onSuccess={(data) => { setProviderData(data); setPage('provider-dashboard'); }}
+          onSuccess={(data) => {
+            setProviderData(data);
+            setPage('provider-dashboard');
+          }}
         />
       );
     }
-    // Show provider dashboard for logged-in providers
+
     if (page === 'provider-dashboard') {
       return (
         <ProviderDashboard
           provider={providerData}
-          onLogout={() => { setProviderData(null); setPage('home'); }}
-          services={services}
+          onLogout={() => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setProviderData(null);
+            setPage('home');
+          }}
+          services={services.filter((service) =>
+            String(service.providerProfileId) === String(providerData?.profile?.provider_profile_id)
+          )}
           onAddService={handleAddService}
+          onDeleteService={handleDeleteService}
         />
       );
     }
-    // Default: Show home page with search and browsing
+
     return (
       <main>
         <section className="hero">
@@ -489,9 +1282,11 @@ export default function App() {
               Book local services,<br />
               <span className="hero-accent">effortlessly.</span>
             </h1>
+
             <p className="hero-subtitle">
               Discover and book trusted providers in your area — all in one place.
             </p>
+
             <SearchBar
               query={searchQuery}
               onChange={setSearchQuery}
@@ -499,22 +1294,25 @@ export default function App() {
             />
           </div>
         </section>
+
         <CategoryGrid onCategoryClick={handleCategoryClick} />
         <HowItWorks />
-        <ProvidersSection services={services} searchQuery={activeQuery} />
+        <ProvidersSection
+          services={services}
+          searchQuery={activeQuery}
+          onBook={handleBookClick}
+        />
       </main>
     );
   };
 
   /**
    * Determine if currently on provider dashboard
-   * Used to conditionally show/hide navbar and footer
    */
   const isDashboard = page === 'provider-dashboard';
 
   /**
    * Render main application layout
-   * Conditionally displays navbar and footer (hidden on dashboard)
    */
   return (
     <div className="app">
@@ -523,10 +1321,20 @@ export default function App() {
           darkMode={darkMode}
           onToggle={toggleDark}
           onSignUp={() => setPage('signup')}
+          onLogin={() => setPage('login')}
           onHome={() => setPage('home')}
         />
       )}
+
       {renderContent()}
+
+      {selectedService && (
+        <BookingModal
+          service={selectedService}
+          onClose={() => setSelectedService(null)}
+        />
+      )}
+
       {!isDashboard && <Footer />}
     </div>
   );

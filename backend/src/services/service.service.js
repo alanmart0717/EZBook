@@ -29,8 +29,14 @@ const getMyServices = async (providerProfileId) => {
     return await Service.getServicesByProvider(providerProfileId);
 };
 
+// Delete service
+const deleteService = async (serviceId, providerProfileId) => {
+    return await Service.deleteService(serviceId, providerProfileId);
+};
+
 module.exports = {
     createService,
     getAllServices,
-    getMyServices
+    getMyServices,
+    deleteService
 };

@@ -60,12 +60,12 @@ const createAppointment = async (userId, data) => {
 
 // Get user appointments
 const getUserAppointments = async (userId) => {
-    return await Appointment.getAppointmentsByUserId(userId);
+    return await Appointment.getAppointmentsByCustomer(userId);
 };
 
 // Get provider appointments
 const getProviderAppointments = async (providerProfileId) => {
-    return await Appointment.getAppointmentsByProviderId(providerProfileId);
+    return await Appointment.getAppointmentsByProvider(providerProfileId);
 };
 
 module.exports = {

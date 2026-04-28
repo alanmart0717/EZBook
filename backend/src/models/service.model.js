@@ -51,6 +51,7 @@ const getServicesByProvider = async (providerProfileId) => {
         SELECT *
         FROM services
         WHERE provider_profile_id = $1
+        AND active_status = true
     `;
 
     const result = await db.query(query, [providerProfileId]);
@@ -69,9 +70,26 @@ const getServiceById = async (serviceId) => {
     return result.rows[0];
 };
 
+// Soft delete service by ID
+const deleteService = async (serviceId, providerProfileId) => {
+    const query = `
+        UPDATE services
+        SET active_status = false
+        WHERE service_id = $1
+        AND provider_profile_id = $2
+        RETURNING *
+    `;
+
+    const values = [serviceId, providerProfileId];
+
+    const result = await db.query(query, values);
+    return result.rows[0];
+};
+
 module.exports = {
     createService,
     getAllServices,
     getServicesByProvider,
-    getServiceById
+    getServiceById,
+    deleteService
 };

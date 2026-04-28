@@ -81,7 +81,7 @@ const checkAvailability = async (
         "saturday"
     ];
 
-    const dayOfWeek = days[new Date(appointmentDate).getDay()];
+    const dayOfWeek = days[new Date(`${appointmentDate}T00:00:00`).getDay()];
 
     const query = `
         SELECT *
