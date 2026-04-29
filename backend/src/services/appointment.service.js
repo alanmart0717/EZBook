@@ -12,19 +12,19 @@ const createAppointment = async (userId, data) => {
         start_time
     } = data;
 
-    // 1. Validate required fields
+    // Validate required fields
     if (!provider_profile_id || !service_id || !appointment_date || !start_time) {
         throw new Error("Missing required booking fields");
     }
 
-    // 2. Get service details (for duration calculation)
+    // Get service details (for duration calculation)
     const service = await Service.getServiceById(service_id);
 
     if (!service) {
         throw new Error("Service not found");
     }
 
-    // 3. Calculate end time based on duration
+    // Calculate end time based on duration
     const durationMinutes = service.duration_minutes;
 
     const start = new Date(`1970-01-01T${start_time}Z`);
@@ -32,7 +32,7 @@ const createAppointment = async (userId, data) => {
 
     const end_time = end.toISOString().substring(11, 19);
 
-    // 4. Check provider availability
+    // Check provider availability
     const isAvailable = await Availability.checkAvailability(
         provider_profile_id,
         appointment_date,
@@ -44,7 +44,7 @@ const createAppointment = async (userId, data) => {
         throw new Error("Provider not available at this time");
     }
 
-    // 5. Create appointment
+    // Create appointment
     const appointment = await Appointment.createAppointment(
         userId,
         provider_profile_id,
