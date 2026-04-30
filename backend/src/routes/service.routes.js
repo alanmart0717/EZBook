@@ -22,11 +22,35 @@ router.post(
     ServiceController.createService
 );
 
+// Delete service
 router.delete(
     "/:serviceId",
     authenticateUser,
     authorizeRole(["provider"]),
     ServiceController.deleteService
+);
+
+// Archive service
+router.patch(
+  "/:serviceId/archive",
+  authenticateUser,
+  authorizeRole(["provider"]),
+  ServiceController.archiveService
+);
+
+// Unarchive service
+router.patch(
+  "/:serviceId/unarchive",
+  authenticateUser,
+  authorizeRole(["provider"]),
+  ServiceController.unarchiveService
+);
+
+// Get archived service
+router.get(
+  "/provider/me/archived",
+  authenticateUser,
+  ServiceController.getMyArchivedServices
 );
 
 module.exports = router;

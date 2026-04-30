@@ -37,29 +37,52 @@ const SERVICE_CATEGORIES = [
 /**
  * Navbar Component - Top navigation bar
  */
-function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome }) {
+function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome, currentUser, onLogout, onDashboard }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
         <span className="brand" onClick={onHome} style={{ cursor: 'pointer' }}>
           EZ<span className="brand-accent">Book</span>
         </span>
+
         <div className="nav-links">
-          <button className="btn-outline" onClick={onLogin}>Log In</button>
-          <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
+          {currentUser ? (
+            <>
+              <span className="nav-user-name">
+                {currentUser.first_name} {currentUser.last_name}
+              </span>
+
+              {currentUser.role === 'provider' && (
+                <button className="btn-outline" onClick={onDashboard}>
+                  Dashboard
+                </button>
+              )}
+
+              <button className="btn-primary" onClick={onLogout}>
+                Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-outline" onClick={onLogin}>Log In</button>
+              <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
+            </>
+          )}
+
           <button
             className="theme-toggle"
             onClick={onToggle}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            <div className="toggle-thumb">{darkMode ? '🌙' : '☀️'}</div>
+            <div className="toggle-thumb">
+              {darkMode ? '🌙' : '☀️'}
+            </div>
           </button>
         </div>
       </div>
     </nav>
   );
 }
-
 /**
  * LoginForm Component - Existing user login form
  */
@@ -1019,61 +1042,78 @@ export default function App() {
   const [providerData, setProviderData] = useState(null);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [archivedServices, setArchivedServices] = useState([]);
+  const [sessionChecked, setSessionChecked] = useState(false);
   /**
  * Restore logged-in user after page refresh
  */
-useEffect(() => {
-  const restoreSession = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const savedPage = localStorage.getItem('page');
+        const token = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
 
-      if (!token || !savedUser) return;
-
-      const user = JSON.parse(savedUser);
-
-      if (user.role === 'provider') {
-        const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const profileData = await profileRes.json();
-
-        if (!profileRes.ok) {
-          throw new Error(profileData.error || 'Could not restore provider session');
+        if (!token || !savedUser) {
+          setPage(savedPage || 'home');
+          return;
         }
 
-        const profile = profileData.data;
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
 
-        setProviderData({
-          name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-          email: user.email,
-          phone: user.phone_number ?? '',
-          businessName: profile?.business_name ?? '',
-          businessType: profile?.service_category ?? '',
-          location: profile?.location ?? '',
-          bio: profile?.bio ?? '',
-          token,
-          user,
-          profile,
-        });
+        if (user.role === 'provider') {
+          const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-        setPage('provider-dashboard');
+          const profileData = await profileRes.json();
+
+          if (!profileRes.ok) {
+            throw new Error(profileData.error || 'Could not restore provider session');
+          }
+
+          const profile = profileData.data;
+
+          setProviderData({
+            name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+            email: user.email,
+            phone: user.phone_number ?? '',
+            businessName: profile?.business_name ?? '',
+            businessType: profile?.service_category ?? '',
+            location: profile?.location ?? '',
+            bio: profile?.bio ?? '',
+            token,
+            user,
+            profile,
+          });
+        }
+
+        setPage(savedPage || 'home');
+
+      } catch (err) {
+        console.error('Session restore failed:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('page');
+        setPage('home');
+      } finally {
+        setSessionChecked(true);
       }
+    };
 
-    } catch (err) {
-      console.error('Session restore failed:', err);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    restoreSession();
+  }, []);
+
+  useEffect(() => {
+    if (sessionChecked) {
+      localStorage.setItem('page', page);
     }
-  };
-
-  restoreSession();
-}, []);
+  }, [page, sessionChecked]);
 
   /**
    * Load services from backend
@@ -1111,17 +1151,75 @@ useEffect(() => {
   }, []);
 
   /**
+   * Persistent theme change
+   */
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      setDarkMode(false);
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, []);
+
+  /**
+   * Load archived services from backend
+   */
+  const fetchArchivedServices = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE_URL}/api/services/provider/me/archived`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch archived services');
+      }
+
+      const mappedArchived = data.data.map((s) => ({
+        id: s.service_id,
+        serviceId: s.service_id,
+        providerProfileId: s.provider_profile_id,
+        serviceName: s.service_name,
+        serviceType: s.description,
+        duration: s.duration_minutes,
+        price: s.price,
+        archivedAt: s.archived_at,
+      }));
+
+      setArchivedServices(mappedArchived);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  /**
    * Add a new service to the platform
    */
   const handleAddService = (service) => {
-    setServices((prev) => [
-      ...prev,
-      {
-        ...service,
-        providerName: providerData?.name ?? 'Unknown',
-        businessName: providerData?.businessName ?? '',
-      },
-    ]);
+    const normalizedService = {
+      ...service,
+      id: service.id || service.serviceId || service.service_id || Date.now(),
+      serviceId: service.serviceId || service.service_id,
+      providerProfileId:
+        service.providerProfileId ||
+        service.provider_profile_id ||
+        providerData?.profile?.provider_profile_id,
+      providerName: providerData?.name ?? 'Unknown',
+      businessName: providerData?.businessName ?? '',
+    };
+
+    setServices((prev) => [...prev, normalizedService]);
   };
 
   /**
@@ -1135,12 +1233,19 @@ useEffect(() => {
         throw new Error('You are not logged in');
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/services/${serviceId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const cancelAppointments = window.confirm(
+        "Do you also want to cancel all appointments booked for this service?"
+      );
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/services/${serviceId}?cancelAppointments=${cancelAppointments}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       const data = await res.json();
 
@@ -1161,10 +1266,91 @@ useEffect(() => {
     }
   };
 
+  const handleArchiveService = async (serviceId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const cancelAppointments = window.confirm(
+        "Do you want to cancel all future appointments booked for this service?"
+      );
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/services/${serviceId}/archive?cancelAppointments=${cancelAppointments}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to archive service');
+      }
+
+      setServices((prev) =>
+        prev.filter((service) =>
+          service.id !== serviceId && service.serviceId !== serviceId
+        )
+      );
+
+      fetchArchivedServices();
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  };
+
+  const handleUnarchiveService = async (serviceId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const res = await fetch(`${API_BASE_URL}/api/services/${serviceId}/unarchive`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to restore service');
+      }
+
+      const restored = data.data;
+
+      setArchivedServices((prev) =>
+        prev.filter((service) =>
+          service.id !== serviceId && service.serviceId !== serviceId
+        )
+      );
+
+      handleAddService({
+        id: restored.service_id,
+        serviceId: restored.service_id,
+        providerProfileId: restored.provider_profile_id,
+        serviceName: restored.service_name,
+        serviceType: restored.description,
+        duration: restored.duration_minutes,
+        price: restored.price,
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  };
+
   /**
    * Handle successful login
    */
   const handleLoginSuccess = (data) => {
+    setCurrentUser(data.user);
+
     if (data.user?.role === 'provider') {
       setProviderData(data);
       setPage('provider-dashboard');
@@ -1172,6 +1358,20 @@ useEffect(() => {
       setPage('home');
       alert('Customer login successful. Customer dashboard is coming soon.');
     }
+  };
+
+  /**
+   *  Handle logout
+   */
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('page');
+
+    setCurrentUser(null);
+    setProviderData(null);
+    setPage('home');
   };
 
   /**
@@ -1186,9 +1386,11 @@ useEffect(() => {
    */
   const toggleDark = () => {
     const next = !darkMode;
+    const theme = next ? 'dark' : 'light';
 
     setDarkMode(next);
-    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
   };
 
   /**
@@ -1207,6 +1409,14 @@ useEffect(() => {
     setActiveQuery(label);
     document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  /**
+   * Loading Protection
+   */
+  if (!sessionChecked) {
+    return <div className="app">Loading...</div>;
+  }
+
 
   /**
    * Render the appropriate view based on current page state
@@ -1235,10 +1445,11 @@ useEffect(() => {
       return (
         <CustomerSignUpForm
           onBack={() => setPage('signup')}
-          onSuccess={() => {
-            setPage('home');
-            alert('Customer account created successfully. You can now book services.');
-          }}
+          onSuccess={(data) => {
+          setCurrentUser(data.user);
+          setPage('home');
+          alert('Customer account created successfully. You can now book services.');
+        }}
         />
       );
     }
@@ -1248,6 +1459,7 @@ useEffect(() => {
         <ProviderSignUpForm
           onBack={() => setPage('signup')}
           onSuccess={(data) => {
+            setCurrentUser(data.user);
             setProviderData(data);
             setPage('provider-dashboard');
           }}
@@ -1256,20 +1468,24 @@ useEffect(() => {
     }
 
     if (page === 'provider-dashboard') {
+
+      console.log("Provider Profile ID:", providerData?.profile?.provider_profile_id);
+      console.log("Services:", services);
+
       return (
         <ProviderDashboard
           provider={providerData}
-          onLogout={() => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setProviderData(null);
-            setPage('home');
-          }}
+          onLogout={handleLogout}
+
           services={services.filter((service) =>
             String(service.providerProfileId) === String(providerData?.profile?.provider_profile_id)
           )}
+          archivedServices={archivedServices}
+          fetchArchivedServices={fetchArchivedServices}
           onAddService={handleAddService}
           onDeleteService={handleDeleteService}
+          onArchiveService={handleArchiveService}
+          onUnarchiveService={handleUnarchiveService}
         />
       );
     }
@@ -1309,7 +1525,39 @@ useEffect(() => {
   /**
    * Determine if currently on provider dashboard
    */
-  const isDashboard = page === 'provider-dashboard';
+  const isDashboard = false;
+
+  const handleDashboardClick = async () => {
+    if (currentUser?.role === 'provider') {
+      try {
+        const token = localStorage.getItem('token');
+
+        const res = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error);
+
+        setProviderData((prev) => ({
+          ...prev,
+          profile: data.data,
+        }));
+
+        setPage('provider-dashboard');
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load provider profile");
+      }
+
+      return;
+    }
+
+    alert('Please log in as a provider first.');
+  };
 
   /**
    * Render main application layout
@@ -1323,6 +1571,9 @@ useEffect(() => {
           onSignUp={() => setPage('signup')}
           onLogin={() => setPage('login')}
           onHome={() => setPage('home')}
+          currentUser={currentUser}
+          onDashboard={handleDashboardClick}
+          onLogout={handleLogout}
         />
       )}
 

@@ -2,6 +2,14 @@ require("dotenv").config();
 
 const app = require("./app");
 const db = require("./db/connection");
+const appointmentRoutes = require("./routes/appointments.routes");
+
+
+app.use("/api/appointments", appointmentRoutes);
+
+db.query("SELECT NOW()")
+    .then(() => console.log("Supabase database connected successfully"))
+    .catch((err) => console.error("Database connection failed:", err.message));
 
 const PORT = process.env.PORT || 5000;
 

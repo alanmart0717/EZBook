@@ -105,9 +105,37 @@ const checkAvailability = async (
     return result.rows.length > 0;
 };
 
+// Get provider availability for a specific date
+const getAvailabilityByDate = async (providerProfileId, appointmentDate) => {
+    const days = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+    ];
+
+    const dayOfWeek = days[new Date(`${appointmentDate}T00:00:00`).getDay()];
+
+    const query = `
+        SELECT *
+        FROM provider_availability
+        WHERE provider_profile_id = $1
+        AND day = $2
+        AND is_available = true
+        ORDER BY start_time
+    `;
+
+    const result = await db.query(query, [providerProfileId, dayOfWeek]);
+    return result.rows;
+};
+
 module.exports = {
     createAvailability,
     getAvailabilityByProviderId,
     deleteAvailability,
-    checkAvailability
+    checkAvailability,
+    getAvailabilityByDate
 };

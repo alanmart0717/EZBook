@@ -2,6 +2,18 @@ const Appointment = require("../models/appointment.model");
 const Service = require("../models/service.model");
 const Availability = require("../models/availability.model");
 
+const timeToMinutes = (time) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+};
+
+const minutesToTime = (totalMinutes) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
 // Create appointment
 const createAppointment = async (userId, data) => {
 
@@ -44,6 +56,19 @@ const createAppointment = async (userId, data) => {
         throw new Error("Provider not available at this time");
     }
 
+    // Check for overlapping appointments
+    const hasConflict = await Appointment.checkAppointmentConflict(
+        provider_profile_id,
+        appointment_date,
+        start_time,
+        end_time
+    );
+
+    if (hasConflict) {
+        throw new Error("Time slot already booked");
+    }
+
+
     // Create appointment
     const appointment = await Appointment.createAppointment(
         userId,
@@ -68,8 +93,56 @@ const getProviderAppointments = async (providerProfileId) => {
     return await Appointment.getAppointmentsByProvider(providerProfileId);
 };
 
+const getAvailableTimes = async (providerProfileId, serviceId, appointmentDate) => {
+    const service = await Service.getServiceById(serviceId);
+
+    if (!service) {
+        throw new Error("Service not found");
+    }
+
+    const durationMinutes = service.duration_minutes;
+
+    const availabilitySlots = await Availability.getAvailabilityByDate(
+        providerProfileId,
+        appointmentDate
+    );
+
+    const bookedAppointments = await Appointment.getBookedAppointmentsByDate(
+        providerProfileId,
+        appointmentDate
+    );
+
+    const availableTimes = [];
+
+    availabilitySlots.forEach((slot) => {
+        let currentTime = timeToMinutes(slot.start_time);
+        const endTime = timeToMinutes(slot.end_time);
+
+        while (currentTime + durationMinutes <= endTime) {
+            const potentialStart = minutesToTime(currentTime);
+            const potentialEnd = minutesToTime(currentTime + durationMinutes);
+
+            const hasConflict = bookedAppointments.some((appointment) => {
+                return (
+                    potentialStart < appointment.end_time.slice(0, 5) &&
+                    potentialEnd > appointment.start_time.slice(0, 5)
+                );
+            });
+
+            if (!hasConflict) {
+                availableTimes.push(potentialStart);
+            }
+
+            currentTime += 30;
+        }
+    });
+
+    return availableTimes;
+};
+
 module.exports = {
     createAppointment,
     getUserAppointments,
-    getProviderAppointments
+    getProviderAppointments,
+    getAvailableTimes
 };
