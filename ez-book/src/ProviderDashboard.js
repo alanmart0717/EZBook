@@ -926,7 +926,10 @@ function ProfileSection({ provider }) {
 //   onAddService — lifts a new service up to App's state, updating both the dashboard and homepage
 function ProviderDashboard({ 
   provider, 
-  onLogout, 
+  onLogout,
+  onHome,
+  darkMode,
+  onToggleTheme,
   services, 
   archivedServices = [],
   onAddService, 
@@ -970,9 +973,9 @@ function ProviderDashboard({
       {/* ── Sidebar (hidden on mobile, replaced by bottom nav) ── */}
       <aside className="dash-sidebar">
 
-        <div className="dash-sidebar-brand">
+        <button className="dash-sidebar-brand dash-brand-button" onClick={onHome}>
           EZ<span className="brand-accent">Book</span>
-        </div>
+        </button>
 
         <nav className="dash-nav">
           {NAV_ITEMS.map((item) => (
@@ -997,11 +1000,25 @@ function ProviderDashboard({
           <h1 className="dash-topbar-title">
             {NAV_ITEMS.find((n) => n.id === activeSection)?.label ?? 'Dashboard'}
           </h1>
+
           <div className="dash-topbar-provider">
+            <button
+              className="theme-toggle"
+              onClick={onToggleTheme}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <div className="toggle-thumb">
+                {darkMode ? '🌙' : '☀️'}
+              </div>
+            </button>
+
             <div className="dash-topbar-avatar">
               {provider?.name?.[0]?.toUpperCase() ?? '?'}
             </div>
-            <span className="dash-topbar-name">{provider?.name ?? 'Provider'}</span>
+
+            <span className="dash-topbar-name">
+              {provider?.name ?? 'Provider'}
+            </span>
           </div>
         </header>
 

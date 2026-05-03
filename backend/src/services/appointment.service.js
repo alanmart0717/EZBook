@@ -123,6 +123,9 @@ const getAvailableTimes = async (providerProfileId, serviceId, appointmentDate) 
         appointmentDate
     );
 
+    console.log("AVAILABILITY SLOTS:", availabilitySlots);
+    console.log("BOOKED APPOINTMENTS:", bookedAppointments);
+
     const availableTimes = [];
 
     availabilitySlots.forEach((slot) => {

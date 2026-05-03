@@ -1168,6 +1168,16 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (
+      sessionChecked &&
+      page === 'provider-dashboard' &&
+      currentUser?.role === 'provider'
+    ) {
+      fetchArchivedServices();
+    }
+  }, [sessionChecked, page, currentUser]);
+
   /**
    * Add a new service to the platform
    */
@@ -1441,7 +1451,9 @@ export default function App() {
         <ProviderDashboard
           provider={providerData}
           onLogout={handleLogout}
-
+          onHome={() => setPage('home')}
+          darkMode={darkMode}
+          onToggleTheme={toggleDark}
           services={services.filter((service) =>
             String(service.providerProfileId) === String(providerData?.profile?.provider_profile_id)
           )}
@@ -1490,7 +1502,7 @@ export default function App() {
   /**
    * Determine if currently on provider dashboard
    */
-  const isDashboard = false;
+  const isDashboard = page === 'provider-dashboard';
 
   const handleDashboardClick = async () => {
     if (currentUser?.role === 'provider') {

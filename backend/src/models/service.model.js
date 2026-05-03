@@ -49,6 +49,7 @@ const getAllServices = async () => {
     JOIN provider_profiles p ON s.provider_profile_id = p.provider_profile_id
     JOIN users u ON p.user_id = u.user_id
     WHERE s.is_archived = false
+    AND s.active_status = true
     ORDER BY s.created_at DESC
     `
   );
@@ -69,12 +70,14 @@ const getServicesByProvider = async (providerProfileId) => {
     return result.rows;
 };
 
-// Get single service by ID (USED BY APPOINTMENTS)
+// Get single active service by ID
 const getServiceById = async (serviceId) => {
     const query = `
         SELECT *
         FROM services
         WHERE service_id = $1
+        AND active_status = true
+        AND is_archived = false
     `;
 
     const result = await db.query(query, [serviceId]);
@@ -119,6 +122,7 @@ const getArchivedServicesByProviderId = async (providerProfileId) => {
     FROM services
     WHERE provider_profile_id = $1
       AND is_archived = true
+      AND active_status = true
     ORDER BY archived_at DESC
     `,
     [providerProfileId]

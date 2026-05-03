@@ -89,8 +89,8 @@ const checkAvailability = async (
         WHERE provider_profile_id = $1
         AND day = $2
         AND is_available = true
-        AND start_time <= $3
-        AND end_time >= $4
+        AND start_time::time <= $3::time
+        AND end_time::time >= $4::time
     `;
 
     const values = [
@@ -100,7 +100,18 @@ const checkAvailability = async (
         endTime
     ];
 
+    console.log("CHECK AVAILABILITY VALUES:", {
+    providerProfileId,
+    appointmentDate,
+    dayOfWeek,
+    startTime,
+    endTime,
+    values
+});
+
     const result = await db.query(query, values);
+
+    console.log("AVAILABILITY MATCHES:", result.rows);
 
     return result.rows.length > 0;
 };
@@ -120,7 +131,13 @@ const getAvailabilityByDate = async (providerProfileId, appointmentDate) => {
     const dayOfWeek = days[new Date(`${appointmentDate}T00:00:00`).getDay()];
 
     const query = `
-        SELECT *
+        SELECT 
+            availability_id,
+            provider_profile_id,
+            day,
+            start_time::time AS start_time,
+            end_time::time AS end_time,
+            is_available
         FROM provider_availability
         WHERE provider_profile_id = $1
         AND day = $2
