@@ -25,5 +25,6 @@ app.listen(PORT, () => {
         console.log("Database connected successfully");
     } catch (err) {
         console.error("Database connection failed:", err.message);
+        console.error("Error code:", err.code);
     }
 })();

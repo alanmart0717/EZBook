@@ -20,7 +20,7 @@ import ProviderDashboard from './ProviderDashboard';
  * Backend API base URL
  * Backend server runs on port 5000 by default
  */
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
 
 /**
  * Service categories displayed in the browsing interface
