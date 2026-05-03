@@ -657,7 +657,7 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
  * and time, then creates an appointment through the backend.
  */
 function BookingModal({ service, onClose }) {
-  const [availability, setAvailability] = useState([]);
+  const [availableTimes, setAvailableTimes] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
@@ -665,81 +665,36 @@ function BookingModal({ service, onClose }) {
   const [error, setError] = useState('');
 
   /**
-   * Load availability for the selected service's provider
+   *  Fetch hourly time slot from provider availability
    */
-  useEffect(() => {
-    const fetchAvailability = async () => {
+  const fetchAvailableTimes = async (date) => {
+    try {
       setLoading(true);
       setError('');
 
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/provider/availability/provider/${service.providerProfileId}`
-        );
+      const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${date}`;
 
-        const data = await res.json();
+      console.log("AVAILABLE TIMES URL:", url); // 👈 ADD THIS
 
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to load availability');
-        }
+      const res = await fetch(url);
 
-        setAvailability(data.data || []);
+      const text = await res.text();
+      console.log("RAW RESPONSE:", text); // 👈 ADD THIS
 
-      } catch (err) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      const data = JSON.parse(text);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load available times");
       }
-    };
 
-    if (service?.providerProfileId) {
-      fetchAvailability();
+      setAvailableTimes(data.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+      setAvailableTimes([]);
+    } finally {
+      setLoading(false);
     }
-  }, [service]);
-
-  /**
-   * Convert a selected date into the same day name used by the backend
-   */
-  const getDayFromDate = (dateValue) => {
-    if (!dateValue) return '';
-
-    const days = [
-      'sunday',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-    ];
-
-    const date = new Date(`${dateValue}T00:00:00`);
-    return days[date.getDay()];
-  };
-
-  /**
-   * Generate hourly time slots from provider availability
-   */
-  const getAvailableTimes = () => {
-    const selectedDay = getDayFromDate(selectedDate);
-
-    if (!selectedDay) return [];
-
-    const matchingSlots = availability.filter((slot) => slot.day === selectedDay);
-
-    const times = [];
-
-    matchingSlots.forEach((slot) => {
-      const startHour = parseInt(slot.start_time.split(':')[0], 10);
-      const endHour = parseInt(slot.end_time.split(':')[0], 10);
-
-      for (let hour = startHour; hour < endHour; hour++) {
-        times.push(`${String(hour).padStart(2, '0')}:00:00`);
-      }
-    });
-
-    return times;
   };
 
   /**
@@ -794,8 +749,6 @@ function BookingModal({ service, onClose }) {
     }
   };
 
-  const availableTimes = getAvailableTimes();
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -812,14 +765,14 @@ function BookingModal({ service, onClose }) {
           <label className="form-label">
             Appointment Date
             <input
-              className="form-input"
               type="date"
               value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
+              onChange={async (e) => {
+                const date = e.target.value;
+                setSelectedDate(date);
                 setSelectedTime('');
+                await fetchAvailableTimes(date);
               }}
-              required
             />
           </label>
 

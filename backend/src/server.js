@@ -2,10 +2,6 @@ require("dotenv").config();
 
 const app = require("./app");
 const db = require("./db/connection");
-const appointmentRoutes = require("./routes/appointments.routes");
-
-
-app.use("/api/appointments", appointmentRoutes);
 
 db.query("SELECT NOW()")
     .then(() => console.log("Supabase database connected successfully"))
