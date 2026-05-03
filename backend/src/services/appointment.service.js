@@ -11,7 +11,7 @@ const minutesToTime = (totalMinutes) => {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
 
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
 };
 
 // Create appointment
@@ -77,7 +77,7 @@ const createAppointment = async (userId, data) => {
         appointment_date,
         start_time,
         end_time,
-        "confirmed"
+        data.notes || "Booked from EZBook"
     );
 
     return appointment;
