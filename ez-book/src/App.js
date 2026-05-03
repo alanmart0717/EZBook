@@ -23,6 +23,18 @@ import ProviderDashboard from './ProviderDashboard';
 const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
 
 /**
+ * Timeout helper
+ */
+const fetchWithTimeout = (url, options = {}, timeout = 10000) => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timed out")), timeout)
+    ),
+  ]);
+};
+
+/**
  * Service categories displayed in the browsing interface
  */
 const SERVICE_CATEGORIES = [
@@ -1064,7 +1076,7 @@ export default function App() {
         setCurrentUser(user);
 
         if (user.role === 'provider') {
-          const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+          const profileRes = await fetchWithTimeout(`${API_BASE_URL}/api/provider/profile/me`, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1121,7 +1133,7 @@ export default function App() {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/services`);
+        const res = await fetchWithTimeout(`${API_BASE_URL}/api/services`);
         const data = await res.json();
 
         if (!res.ok) {
