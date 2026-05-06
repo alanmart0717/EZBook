@@ -657,6 +657,17 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
  * and time, then creates an appointment through the backend.
  */
 function BookingModal({ service, onClose }) {
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const [step, setStep] = useState('calendar');
+  const [currentMonth, setCurrentMonth] = useState({
+    year: todayDate.getFullYear(),
+    month: todayDate.getMonth(),
+  });
+  const [availableDates, setAvailableDates] = useState(new Set());
+  const [datesLoading, setDatesLoading] = useState(false);
+
   const [availableTimes, setAvailableTimes] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -664,9 +675,47 @@ function BookingModal({ service, onClose }) {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState('');
 
-  /**
-   *  Fetch hourly time slot from provider availability
-   */
+  useEffect(() => {
+    const fetchMonthAvailability = async () => {
+      setDatesLoading(true);
+      const { year, month } = currentMonth;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const dateStrings = [];
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        date.setHours(0, 0, 0, 0);
+        if (date >= todayDate) {
+          dateStrings.push(
+            `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+          );
+        }
+      }
+
+      try {
+        const results = await Promise.all(
+          dateStrings.map(async (dateStr) => {
+            try {
+              const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${dateStr}`;
+              const res = await fetch(url);
+              const data = await res.json();
+              return res.ok && data.data?.length > 0 ? dateStr : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        setAvailableDates(new Set(results.filter(Boolean)));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setDatesLoading(false);
+      }
+    };
+
+    fetchMonthAvailability();
+  }, [currentMonth]);
+
   const fetchAvailableTimes = async (date) => {
     try {
       setLoading(true);
@@ -674,12 +723,11 @@ function BookingModal({ service, onClose }) {
 
       const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${date}`;
 
-      console.log("AVAILABLE TIMES URL:", url); // 👈 ADD THIS
+      console.log("AVAILABLE TIMES URL:", url);
 
       const res = await fetch(url);
-
       const text = await res.text();
-      console.log("RAW RESPONSE:", text); // 👈 ADD THIS
+      console.log("RAW RESPONSE:", text);
 
       const data = JSON.parse(text);
 
@@ -697,12 +745,7 @@ function BookingModal({ service, onClose }) {
     }
   };
 
-  /**
-   * Submit selected booking to backend
-   */
-  const handleBook = async (e) => {
-    e.preventDefault();
-
+  const handleBook = async () => {
     setBookingLoading(true);
     setError('');
 
@@ -749,76 +792,163 @@ function BookingModal({ service, onClose }) {
     }
   };
 
+  const { year, month } = currentMonth;
+  const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  const cells = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const handlePrevMonth = () =>
+    setCurrentMonth(({ year, month }) =>
+      month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
+    );
+
+  const handleNextMonth = () =>
+    setCurrentMonth(({ year, month }) =>
+      month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 }
+    );
+
+  const handleDateClick = (day) => {
+    if (!day) return;
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+    if (date < todayDate || !availableDates.has(dateStr)) return;
+    setSelectedDate(dateStr);
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">Book {service.serviceName}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
+      <div className="modal modal--cal" onClick={(e) => e.stopPropagation()}>
 
-        <form className="signup-form" onSubmit={handleBook}>
-          <p className="signup-subtitle">
-            {service.serviceType} · ${Number(service.price).toFixed(2)} · {service.duration} min
-          </p>
+        {step === 'calendar' && (
+          <>
+            <div className="modal-header">
+              <h2 className="modal-title">Book {service.serviceName}</h2>
+              <button className="modal-close" onClick={onClose}>✕</button>
+            </div>
 
-          <label className="form-label">
-            Appointment Date
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={async (e) => {
-                const date = e.target.value;
-                setSelectedDate(date);
-                setSelectedTime('');
-                await fetchAvailableTimes(date);
-              }}
-            />
-          </label>
-
-          <label className="form-label">
-            Available Time
-            <select
-              className="form-input form-select"
-              value={selectedTime}
-              onChange={(e) => setSelectedTime(e.target.value)}
-              required
-              disabled={!selectedDate || loading}
-            >
-              <option value="">
-                {loading ? 'Loading times...' : 'Select a time'}
-              </option>
-
-              {availableTimes.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {selectedDate && !loading && availableTimes.length === 0 && (
-            <p className="form-error">
-              No availability for this date.
+            <p className="signup-subtitle">
+              {service.serviceType} · ${Number(service.price).toFixed(2)} · {service.duration} min
             </p>
-          )}
 
-          {error && (
-            <p className="form-error">
-              {error}
+            <div className="cal-nav">
+              <button className="cal-nav-btn" onClick={handlePrevMonth}>‹</button>
+              <span className="cal-month-label">{monthName} {year}</span>
+              <button className="cal-nav-btn" onClick={handleNextMonth}>›</button>
+            </div>
+
+            {datesLoading ? (
+              <p className="cal-loading">Loading availability…</p>
+            ) : (
+              <div className="cal-grid">
+                {DAY_INITIALS.map((d, i) => (
+                  <div key={i} className="cal-day-initial">{d}</div>
+                ))}
+                {cells.map((day, i) => {
+                  if (!day) return <div key={i} className="cal-cell cal-cell--empty" />;
+
+                  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const date = new Date(year, month, day);
+                  date.setHours(0, 0, 0, 0);
+                  const isPast = date < todayDate;
+                  const isToday = date.getTime() === todayDate.getTime();
+                  const isAvail = availableDates.has(dateStr);
+                  const isSel = selectedDate === dateStr;
+
+                  let cls = 'cal-cell';
+                  if (isPast) cls += ' cal-cell--past';
+                  else if (isSel) cls += ' cal-cell--selected';
+                  else if (isAvail) cls += ' cal-cell--available';
+
+                  return (
+                    <div key={i} className={cls} onClick={() => handleDateClick(day)}>
+                      {day}
+                      {isToday && <span className="cal-today-dot" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {error && <p className="form-error">{error}</p>}
+
+            <div className="modal-actions">
+              <button type="button" className="btn-outline" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!selectedDate}
+                onClick={async () => {
+                  await fetchAvailableTimes(selectedDate);
+                  setStep('time');
+                }}
+              >
+                Confirm Date
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'time' && (
+          <>
+            <div className="modal-header">
+              <h2 className="modal-title">Select a Time</h2>
+              <button className="modal-close" onClick={onClose}>✕</button>
+            </div>
+
+            <p className="signup-subtitle">
+              {service.serviceName} · {selectedDate} · {service.duration} min
             </p>
-          )}
 
-          <div className="modal-actions">
-            <button type="button" className="btn-outline" onClick={onClose}>
-              Cancel
-            </button>
+            {loading ? (
+              <p className="cal-loading">Loading times…</p>
+            ) : availableTimes.length === 0 ? (
+              <p className="form-error">No availability for this date.</p>
+            ) : (
+              <div className="time-slot-grid">
+                {availableTimes.map((time) => (
+                  <button
+                    key={time}
+                    className={`time-slot${selectedTime === time ? ' time-slot--selected' : ''}`}
+                    onClick={() => setSelectedTime(time)}
+                  >
+                    {time}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <button type="submit" className="btn-primary" disabled={bookingLoading}>
-              {bookingLoading ? 'Booking...' : 'Confirm Booking'}
-            </button>
-          </div>
-        </form>
+            {error && <p className="form-error">{error}</p>}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => { setStep('calendar'); setSelectedTime(''); }}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!selectedTime || bookingLoading}
+                onClick={handleBook}
+              >
+                {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+              </button>
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );
