@@ -4,12 +4,13 @@ import './ProviderDashboard.css';
 // ── Static Data ────────────────────────────────────────────────────────────────
 
 // Backend API base URL. Backend server runs on port 5000 by default.
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
 
 // Drives the sidebar and mobile bottom nav. Add a new entry here to add a new section.
 const NAV_ITEMS = [
   { id: 'overview',     label: 'Overview',     icon: '🏠' },
   { id: 'bookings',     label: 'Bookings',     icon: '📅' },
+  { id: 'history',      label: 'History',      icon: '📜' },
   { id: 'services',     label: 'My Services',  icon: '🛠️' },
   { id: 'availability', label: 'Availability', icon: '🗓️' },
   { id: 'profile',      label: 'Profile',      icon: '👤' },
@@ -278,7 +279,7 @@ function OverviewSection({ provider, onAddService, onViewSchedule }) {
 const formatTime = (timeValue) => {
   if (!timeValue) return '';
 
-  const cleanTime = timeValue.split('-')[0]; // removes -04
+  const cleanTime = timeValue.split('-')[0]; // removes timezone
   const [hour, minute] = cleanTime.split(':');
 
   const date = new Date();
@@ -287,6 +288,28 @@ const formatTime = (timeValue) => {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+  });
+};
+
+const formatDate = (dateValue) => {
+  if (!dateValue) return "";
+
+  const date = new Date(dateValue);
+  const today = new Date();
+
+  // Normalize time (remove hours/minutes)
+  const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const diffDays = (d1 - d2) / (1000 * 60 * 60 * 24);
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   });
 };
 
@@ -325,6 +348,35 @@ function BookingsSection() {
     fetchBookings();
   }, []);
 
+  const handleUpdateStatus = async (appointmentId, action) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/appointments/${appointmentId}/${action}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error);
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.appointment_id === appointmentId ? data.data : b
+        )
+      );
+
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   return (
     <div className="dash-section">
       <h2 className="dash-section-heading">Bookings</h2>
@@ -356,12 +408,31 @@ function BookingsSection() {
 
                 <div className="service-item-meta">
                   <span className="service-item-duration">
-                    {b.appointment_date}
+                    {formatDate(b.appointment_date)}
                   </span>
 
-                 <span className="service-item-price">
-                  {formatTime(b.start_time)} - {formatTime(b.end_time)}
-                </span>
+                  <span className="service-item-price">
+                    {formatTime(b.start_time)} - {formatTime(b.end_time)}
+                  </span>
+
+                  {b.status === "pending" && (
+                    <div style={{ marginTop: "8px" }}>
+                      <button
+                        className="btn-primary"
+                        onClick={() => handleUpdateStatus(b.appointment_id, "accept")}
+                      >
+                        Accept
+                      </button>
+
+                      <button
+                        className="btn-outline"
+                        onClick={() => handleUpdateStatus(b.appointment_id, "decline")}
+                        style={{ marginLeft: "8px" }}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -374,11 +445,104 @@ function BookingsSection() {
   );
 }
 
+// History Section
+
+function HistorySection() {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const token = localStorage.getItem('token');
+
+        const res = await fetch(`${API_BASE_URL}/api/appointments/provider/me/history`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to fetch booking history');
+        }
+
+        setHistory(data.data || []);
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
+
+  return (
+    <div className="dash-section">
+      <h2 className="dash-section-heading">Booking History</h2>
+
+      <div className="dash-card">
+        {loading ? (
+          <p>Loading booking history...</p>
+        ) : error ? (
+          <p className="form-error">{error}</p>
+        ) : history.length === 0 ? (
+          <div className="dash-empty">
+            <span>📜</span>
+            <p>No previous or cancelled bookings yet.</p>
+          </div>
+        ) : (
+          <div className="service-list">
+            {history.map((b) => (
+              <div key={b.appointment_id} className="dash-card service-item">
+                <div className="service-item-info">
+                  <h3 className="service-item-name">
+                    {b.service_name || 'Service'}
+                  </h3>
+
+                  <p className="service-item-type">
+                    {b.first_name} {b.last_name}
+                  </p>
+                </div>
+
+                <div className="service-item-meta">
+                  <span className="service-item-duration">
+                    {formatDate(b.appointment_date)}
+                  </span>
+
+                  <span className="service-item-price">
+                    {formatTime(b.start_time)} - {formatTime(b.end_time)}
+                  </span>
+
+                  <span className="archived-label">
+                    {b.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Services Section ───────────────────────────────────────────────────────────
 // Lists all services the provider has uploaded. Each service card shows the
 // name, type, duration, and price. "services" and "onAddService" both flow down
 // from App so that new uploads are also reflected on the homepage immediately.
-function ServicesSection({ services, onAddService, onDeleteService }) {
+function ServicesSection({ 
+  services,
+  archivedServices = [],
+  onAddService, 
+  onDeleteService ,
+  onArchiveService,
+  onUnarchiveService
+}) {
   const [showModal, setShowModal] = useState(false);
 
   return (
@@ -416,6 +580,49 @@ function ServicesSection({ services, onAddService, onDeleteService }) {
                 >
                   Delete
                 </button>
+                <button
+                  className="btn-outline"
+                  onClick={() => onArchiveService(s.serviceId || s.id)}
+                >
+                  Archive
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="dash-section-header" style={{ marginTop: '2rem' }}>
+        <h2 className="dash-section-heading">Archived / Old Services</h2>
+      </div>
+
+      {archivedServices.length === 0 ? (
+        <div className="dash-card">
+          <div className="dash-empty">
+            <span>📦</span>
+            <p>No archived services yet.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="service-list">
+          {archivedServices.map((s) => (
+            <div key={s.serviceId || s.id} className="dash-card service-item archived-service-card">
+              <div className="service-item-info">
+                <h3 className="service-item-name">{s.serviceName}</h3>
+                <p className="service-item-type">{s.serviceType}</p>
+              </div>
+
+              <div className="service-item-meta">
+                <span className="service-item-duration">⏱ {s.duration} min</span>
+                <span className="service-item-price">${Number(s.price).toFixed(2)}</span>
+                <span className="archived-label">Archived</span>
+
+                <button
+                  className="btn-outline"
+                  onClick={() => onUnarchiveService(s.serviceId || s.id)}
+                >
+                  Restore
+                </button>
               </div>
             </div>
           ))}
@@ -427,6 +634,8 @@ function ServicesSection({ services, onAddService, onDeleteService }) {
         <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} />
       )}
     </div>
+
+    
   );
 }
 
@@ -609,7 +818,7 @@ function AvailabilitySection() {
 
                 <div className="service-item-meta">
                   <span className="service-item-duration">
-                    {slot.start_time} - {slot.end_time}
+                    {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
                   </span>
                 </div>
               </div>
@@ -715,12 +924,18 @@ function ProfileSection({ provider }) {
 //   onLogout     — called when the provider clicks "Log Out"; navigates back to home in App
 //   services     — array of uploaded service objects, owned by App so the homepage shares them
 //   onAddService — lifts a new service up to App's state, updating both the dashboard and homepage
-export default function ProviderDashboard({
-  provider,
+function ProviderDashboard({ 
+  provider, 
   onLogout,
-  services,
-  onAddService,
-  onDeleteService
+  onHome,
+  darkMode,
+  onToggleTheme,
+  services, 
+  archivedServices = [],
+  onAddService, 
+  onDeleteService,
+  onArchiveService,
+  onUnarchiveService
 }) {
   const [activeSection, setActiveSection] = useState('overview');
 
@@ -728,12 +943,16 @@ export default function ProviderDashboard({
   const renderSection = () => {
     switch (activeSection) {
       case 'bookings': return <BookingsSection />;
+      case 'history': return <HistorySection />;
       case 'services':
         return (
           <ServicesSection
             services={services}
+            archivedServices={archivedServices}
             onAddService={onAddService}
             onDeleteService={onDeleteService}
+            onArchiveService={onArchiveService}
+            onUnarchiveService={onUnarchiveService}
           />
         );
       case 'availability': return <AvailabilitySection />;
@@ -753,13 +972,10 @@ export default function ProviderDashboard({
     <div className="dash-layout">
       {/* ── Sidebar (hidden on mobile, replaced by bottom nav) ── */}
       <aside className="dash-sidebar">
-        <div
-          className="dash-sidebar-brand"
-          onClick={onLogout}
-          style={{ cursor: 'pointer' }}
-        >
+
+        <button className="dash-sidebar-brand dash-brand-button" onClick={onHome}>
           EZ<span className="brand-accent">Book</span>
-        </div>
+        </button>
 
         <nav className="dash-nav">
           {NAV_ITEMS.map((item) => (
@@ -784,11 +1000,25 @@ export default function ProviderDashboard({
           <h1 className="dash-topbar-title">
             {NAV_ITEMS.find((n) => n.id === activeSection)?.label ?? 'Dashboard'}
           </h1>
+
           <div className="dash-topbar-provider">
+            <button
+              className="theme-toggle"
+              onClick={onToggleTheme}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <div className="toggle-thumb">
+                {darkMode ? '🌙' : '☀️'}
+              </div>
+            </button>
+
             <div className="dash-topbar-avatar">
               {provider?.name?.[0]?.toUpperCase() ?? '?'}
             </div>
-            <span className="dash-topbar-name">{provider?.name ?? 'Provider'}</span>
+
+            <span className="dash-topbar-name">
+              {provider?.name ?? 'Provider'}
+            </span>
           </div>
         </header>
 
@@ -811,3 +1041,5 @@ export default function ProviderDashboard({
     </div>
   );
 }
+
+export default ProviderDashboard;

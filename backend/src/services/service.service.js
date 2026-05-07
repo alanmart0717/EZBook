@@ -1,4 +1,5 @@
 const Service = require("../models/service.model");
+const Appointment = require("../models/appointment.model");
 
 // Create service
 const createService = async (providerProfileId, data) => {
@@ -31,7 +32,15 @@ const getMyServices = async (providerProfileId) => {
 
 // Delete service
 const deleteService = async (serviceId, providerProfileId) => {
-    return await Service.deleteService(serviceId, providerProfileId);
+    const deletedService = await Service.deleteService(serviceId, providerProfileId);
+
+    if (!deletedService) {
+        throw new Error("Service not found or unauthorized");
+    }
+
+    await Appointment.cancelFutureAppointmentsByService(serviceId);
+
+    return deletedService;
 };
 
 module.exports = {

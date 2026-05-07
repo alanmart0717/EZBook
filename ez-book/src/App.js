@@ -20,7 +20,19 @@ import ProviderDashboard from './ProviderDashboard';
  * Backend API base URL
  * Backend server runs on port 5000 by default
  */
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
+
+/**
+ * Timeout helper
+ */
+const fetchWithTimeout = (url, options = {}, timeout = 10000) => {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Request timed out")), timeout)
+    ),
+  ]);
+};
 
 /**
  * Service categories displayed in the browsing interface
@@ -37,29 +49,52 @@ const SERVICE_CATEGORIES = [
 /**
  * Navbar Component - Top navigation bar
  */
-function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome }) {
+function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome, currentUser, onLogout, onDashboard }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
         <span className="brand" onClick={onHome} style={{ cursor: 'pointer' }}>
           EZ<span className="brand-accent">Book</span>
         </span>
+
         <div className="nav-links">
-          <button className="btn-outline" onClick={onLogin}>Log In</button>
-          <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
+          {currentUser ? (
+            <>
+              <span className="nav-user-name">
+                {currentUser.first_name} {currentUser.last_name}
+              </span>
+
+              {currentUser.role === 'provider' && (
+                <button className="btn-outline" onClick={onDashboard}>
+                  Dashboard
+                </button>
+              )}
+
+              <button className="btn-primary" onClick={onLogout}>
+                Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn-outline" onClick={onLogin}>Log In</button>
+              <button className="btn-primary" onClick={onSignUp}>Sign Up</button>
+            </>
+          )}
+
           <button
             className="theme-toggle"
             onClick={onToggle}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
           >
-            <div className="toggle-thumb">{darkMode ? '🌙' : '☀️'}</div>
+            <div className="toggle-thumb">
+              {darkMode ? '🌙' : '☀️'}
+            </div>
           </button>
         </div>
       </div>
     </nav>
   );
 }
-
 /**
  * LoginForm Component - Existing user login form
  */
@@ -622,97 +657,95 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
  * and time, then creates an appointment through the backend.
  */
 function BookingModal({ service, onClose }) {
-  const [availability, setAvailability] = useState([]);
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const [step, setStep] = useState('calendar');
+  const [currentMonth, setCurrentMonth] = useState({
+    year: todayDate.getFullYear(),
+    month: todayDate.getMonth(),
+  });
+  const [availableDates, setAvailableDates] = useState(new Set());
+  const [datesLoading, setDatesLoading] = useState(false);
+
+  const [availableTimes, setAvailableTimes] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState('');
 
-  /**
-   * Load availability for the selected service's provider
-   */
   useEffect(() => {
-    const fetchAvailability = async () => {
-      setLoading(true);
-      setError('');
+    const fetchMonthAvailability = async () => {
+      setDatesLoading(true);
+      const { year, month } = currentMonth;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const dateStrings = [];
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        date.setHours(0, 0, 0, 0);
+        if (date >= todayDate) {
+          dateStrings.push(
+            `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+          );
+        }
+      }
 
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/provider/availability/provider/${service.providerProfileId}`
+        const results = await Promise.all(
+          dateStrings.map(async (dateStr) => {
+            try {
+              const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${dateStr}`;
+              const res = await fetch(url);
+              const data = await res.json();
+              return res.ok && data.data?.length > 0 ? dateStr : null;
+            } catch {
+              return null;
+            }
+          })
         );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to load availability');
-        }
-
-        setAvailability(data.data || []);
-
+        setAvailableDates(new Set(results.filter(Boolean)));
       } catch (err) {
         console.error(err);
-        setError(err.message);
       } finally {
-        setLoading(false);
+        setDatesLoading(false);
       }
     };
 
-    if (service?.providerProfileId) {
-      fetchAvailability();
-    }
-  }, [service]);
+    fetchMonthAvailability();
+  }, [currentMonth]);
 
-  /**
-   * Convert a selected date into the same day name used by the backend
-   */
-  const getDayFromDate = (dateValue) => {
-    if (!dateValue) return '';
+  const fetchAvailableTimes = async (date) => {
+    try {
+      setLoading(true);
+      setError('');
 
-    const days = [
-      'sunday',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-    ];
+      const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${date}`;
 
-    const date = new Date(`${dateValue}T00:00:00`);
-    return days[date.getDay()];
-  };
+      console.log("AVAILABLE TIMES URL:", url);
 
-  /**
-   * Generate hourly time slots from provider availability
-   */
-  const getAvailableTimes = () => {
-    const selectedDay = getDayFromDate(selectedDate);
+      const res = await fetch(url);
+      const text = await res.text();
+      console.log("RAW RESPONSE:", text);
 
-    if (!selectedDay) return [];
+      const data = JSON.parse(text);
 
-    const matchingSlots = availability.filter((slot) => slot.day === selectedDay);
-
-    const times = [];
-
-    matchingSlots.forEach((slot) => {
-      const startHour = parseInt(slot.start_time.split(':')[0], 10);
-      const endHour = parseInt(slot.end_time.split(':')[0], 10);
-
-      for (let hour = startHour; hour < endHour; hour++) {
-        times.push(`${String(hour).padStart(2, '0')}:00:00`);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load available times");
       }
-    });
 
-    return times;
+      setAvailableTimes(data.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+      setAvailableTimes([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /**
-   * Submit selected booking to backend
-   */
-  const handleBook = async (e) => {
-    e.preventDefault();
-
+  const handleBook = async () => {
     setBookingLoading(true);
     setError('');
 
@@ -759,78 +792,163 @@ function BookingModal({ service, onClose }) {
     }
   };
 
-  const availableTimes = getAvailableTimes();
+  const { year, month } = currentMonth;
+  const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  const cells = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const handlePrevMonth = () =>
+    setCurrentMonth(({ year, month }) =>
+      month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 }
+    );
+
+  const handleNextMonth = () =>
+    setCurrentMonth(({ year, month }) =>
+      month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 }
+    );
+
+  const handleDateClick = (day) => {
+    if (!day) return;
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+    if (date < todayDate || !availableDates.has(dateStr)) return;
+    setSelectedDate(dateStr);
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">Book {service.serviceName}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
+      <div className="modal modal--cal" onClick={(e) => e.stopPropagation()}>
 
-        <form className="signup-form" onSubmit={handleBook}>
-          <p className="signup-subtitle">
-            {service.serviceType} · ${Number(service.price).toFixed(2)} · {service.duration} min
-          </p>
+        {step === 'calendar' && (
+          <>
+            <div className="modal-header">
+              <h2 className="modal-title">Book {service.serviceName}</h2>
+              <button className="modal-close" onClick={onClose}>✕</button>
+            </div>
 
-          <label className="form-label">
-            Appointment Date
-            <input
-              className="form-input"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setSelectedTime('');
-              }}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Available Time
-            <select
-              className="form-input form-select"
-              value={selectedTime}
-              onChange={(e) => setSelectedTime(e.target.value)}
-              required
-              disabled={!selectedDate || loading}
-            >
-              <option value="">
-                {loading ? 'Loading times...' : 'Select a time'}
-              </option>
-
-              {availableTimes.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {selectedDate && !loading && availableTimes.length === 0 && (
-            <p className="form-error">
-              No availability for this date.
+            <p className="signup-subtitle">
+              {service.serviceType} · ${Number(service.price).toFixed(2)} · {service.duration} min
             </p>
-          )}
 
-          {error && (
-            <p className="form-error">
-              {error}
+            <div className="cal-nav">
+              <button className="cal-nav-btn" onClick={handlePrevMonth}>‹</button>
+              <span className="cal-month-label">{monthName} {year}</span>
+              <button className="cal-nav-btn" onClick={handleNextMonth}>›</button>
+            </div>
+
+            {datesLoading ? (
+              <p className="cal-loading">Loading availability…</p>
+            ) : (
+              <div className="cal-grid">
+                {DAY_INITIALS.map((d, i) => (
+                  <div key={i} className="cal-day-initial">{d}</div>
+                ))}
+                {cells.map((day, i) => {
+                  if (!day) return <div key={i} className="cal-cell cal-cell--empty" />;
+
+                  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const date = new Date(year, month, day);
+                  date.setHours(0, 0, 0, 0);
+                  const isPast = date < todayDate;
+                  const isToday = date.getTime() === todayDate.getTime();
+                  const isAvail = availableDates.has(dateStr);
+                  const isSel = selectedDate === dateStr;
+
+                  let cls = 'cal-cell';
+                  if (isPast) cls += ' cal-cell--past';
+                  else if (isSel) cls += ' cal-cell--selected';
+                  else if (isAvail) cls += ' cal-cell--available';
+
+                  return (
+                    <div key={i} className={cls} onClick={() => handleDateClick(day)}>
+                      {day}
+                      {isToday && <span className="cal-today-dot" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {error && <p className="form-error">{error}</p>}
+
+            <div className="modal-actions">
+              <button type="button" className="btn-outline" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!selectedDate}
+                onClick={async () => {
+                  await fetchAvailableTimes(selectedDate);
+                  setStep('time');
+                }}
+              >
+                Confirm Date
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'time' && (
+          <>
+            <div className="modal-header">
+              <h2 className="modal-title">Select a Time</h2>
+              <button className="modal-close" onClick={onClose}>✕</button>
+            </div>
+
+            <p className="signup-subtitle">
+              {service.serviceName} · {selectedDate} · {service.duration} min
             </p>
-          )}
 
-          <div className="modal-actions">
-            <button type="button" className="btn-outline" onClick={onClose}>
-              Cancel
-            </button>
+            {loading ? (
+              <p className="cal-loading">Loading times…</p>
+            ) : availableTimes.length === 0 ? (
+              <p className="form-error">No availability for this date.</p>
+            ) : (
+              <div className="time-slot-grid">
+                {availableTimes.map((time) => (
+                  <button
+                    key={time}
+                    className={`time-slot${selectedTime === time ? ' time-slot--selected' : ''}`}
+                    onClick={() => setSelectedTime(time)}
+                  >
+                    {time}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <button type="submit" className="btn-primary" disabled={bookingLoading}>
-              {bookingLoading ? 'Booking...' : 'Confirm Booking'}
-            </button>
-          </div>
-        </form>
+            {error && <p className="form-error">{error}</p>}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => { setStep('calendar'); setSelectedTime(''); }}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!selectedTime || bookingLoading}
+                onClick={handleBook}
+              >
+                {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+              </button>
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );
@@ -1019,61 +1137,78 @@ export default function App() {
   const [providerData, setProviderData] = useState(null);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [archivedServices, setArchivedServices] = useState([]);
+  const [sessionChecked, setSessionChecked] = useState(false);
   /**
  * Restore logged-in user after page refresh
  */
-useEffect(() => {
-  const restoreSession = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const savedPage = localStorage.getItem('page');
+        const token = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
 
-      if (!token || !savedUser) return;
-
-      const user = JSON.parse(savedUser);
-
-      if (user.role === 'provider') {
-        const profileRes = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const profileData = await profileRes.json();
-
-        if (!profileRes.ok) {
-          throw new Error(profileData.error || 'Could not restore provider session');
+        if (!token || !savedUser) {
+          setPage(savedPage || 'home');
+          return;
         }
 
-        const profile = profileData.data;
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
 
-        setProviderData({
-          name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
-          email: user.email,
-          phone: user.phone_number ?? '',
-          businessName: profile?.business_name ?? '',
-          businessType: profile?.service_category ?? '',
-          location: profile?.location ?? '',
-          bio: profile?.bio ?? '',
-          token,
-          user,
-          profile,
-        });
+        if (user.role === 'provider') {
+          const profileRes = await fetchWithTimeout(`${API_BASE_URL}/api/provider/profile/me`, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-        setPage('provider-dashboard');
+          const profileData = await profileRes.json();
+
+          if (!profileRes.ok) {
+            throw new Error(profileData.error || 'Could not restore provider session');
+          }
+
+          const profile = profileData.data;
+
+          setProviderData({
+            name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+            email: user.email,
+            phone: user.phone_number ?? '',
+            businessName: profile?.business_name ?? '',
+            businessType: profile?.service_category ?? '',
+            location: profile?.location ?? '',
+            bio: profile?.bio ?? '',
+            token,
+            user,
+            profile,
+          });
+        }
+
+        setPage(savedPage || 'home');
+
+      } catch (err) {
+        console.error('Session restore failed:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('page');
+        setPage('home');
+      } finally {
+        setSessionChecked(true);
       }
+    };
 
-    } catch (err) {
-      console.error('Session restore failed:', err);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    restoreSession();
+  }, []);
+
+  useEffect(() => {
+    if (sessionChecked) {
+      localStorage.setItem('page', page);
     }
-  };
-
-  restoreSession();
-}, []);
+  }, [page, sessionChecked]);
 
   /**
    * Load services from backend
@@ -1081,7 +1216,7 @@ useEffect(() => {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/services`);
+        const res = await fetchWithTimeout(`${API_BASE_URL}/api/services`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -1111,17 +1246,85 @@ useEffect(() => {
   }, []);
 
   /**
+   * Persistent theme change
+   */
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      setDarkMode(false);
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, []);
+
+  /**
+   * Load archived services from backend
+   */
+  const fetchArchivedServices = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE_URL}/api/services/provider/me/archived`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch archived services');
+      }
+
+      const mappedArchived = data.data.map((s) => ({
+        id: s.service_id,
+        serviceId: s.service_id,
+        providerProfileId: s.provider_profile_id,
+        serviceName: s.service_name,
+        serviceType: s.description,
+        duration: s.duration_minutes,
+        price: s.price,
+        archivedAt: s.archived_at,
+      }));
+
+      setArchivedServices(mappedArchived);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      sessionChecked &&
+      page === 'provider-dashboard' &&
+      currentUser?.role === 'provider'
+    ) {
+      fetchArchivedServices();
+    }
+  }, [sessionChecked, page, currentUser]);
+
+  /**
    * Add a new service to the platform
    */
   const handleAddService = (service) => {
-    setServices((prev) => [
-      ...prev,
-      {
-        ...service,
-        providerName: providerData?.name ?? 'Unknown',
-        businessName: providerData?.businessName ?? '',
-      },
-    ]);
+    const normalizedService = {
+      ...service,
+      id: service.id || service.serviceId || service.service_id || Date.now(),
+      serviceId: service.serviceId || service.service_id,
+      providerProfileId:
+        service.providerProfileId ||
+        service.provider_profile_id ||
+        providerData?.profile?.provider_profile_id,
+      providerName: providerData?.name ?? 'Unknown',
+      businessName: providerData?.businessName ?? '',
+    };
+
+    setServices((prev) => [...prev, normalizedService]);
   };
 
   /**
@@ -1135,12 +1338,19 @@ useEffect(() => {
         throw new Error('You are not logged in');
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/services/${serviceId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const cancelAppointments = window.confirm(
+        "Do you also want to cancel all appointments booked for this service?"
+      );
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/services/${serviceId}?cancelAppointments=${cancelAppointments}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       const data = await res.json();
 
@@ -1161,10 +1371,91 @@ useEffect(() => {
     }
   };
 
+  const handleArchiveService = async (serviceId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const cancelAppointments = window.confirm(
+        "Do you want to cancel all future appointments booked for this service?"
+      );
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/services/${serviceId}/archive?cancelAppointments=${cancelAppointments}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to archive service');
+      }
+
+      setServices((prev) =>
+        prev.filter((service) =>
+          service.id !== serviceId && service.serviceId !== serviceId
+        )
+      );
+
+      fetchArchivedServices();
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  };
+
+  const handleUnarchiveService = async (serviceId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const res = await fetch(`${API_BASE_URL}/api/services/${serviceId}/unarchive`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to restore service');
+      }
+
+      const restored = data.data;
+
+      setArchivedServices((prev) =>
+        prev.filter((service) =>
+          service.id !== serviceId && service.serviceId !== serviceId
+        )
+      );
+
+      handleAddService({
+        id: restored.service_id,
+        serviceId: restored.service_id,
+        providerProfileId: restored.provider_profile_id,
+        serviceName: restored.service_name,
+        serviceType: restored.description,
+        duration: restored.duration_minutes,
+        price: restored.price,
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  };
+
   /**
    * Handle successful login
    */
   const handleLoginSuccess = (data) => {
+    setCurrentUser(data.user);
+
     if (data.user?.role === 'provider') {
       setProviderData(data);
       setPage('provider-dashboard');
@@ -1172,6 +1463,20 @@ useEffect(() => {
       setPage('home');
       alert('Customer login successful. Customer dashboard is coming soon.');
     }
+  };
+
+  /**
+   *  Handle logout
+   */
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('page');
+
+    setCurrentUser(null);
+    setProviderData(null);
+    setPage('home');
   };
 
   /**
@@ -1186,9 +1491,11 @@ useEffect(() => {
    */
   const toggleDark = () => {
     const next = !darkMode;
+    const theme = next ? 'dark' : 'light';
 
     setDarkMode(next);
-    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
   };
 
   /**
@@ -1207,6 +1514,14 @@ useEffect(() => {
     setActiveQuery(label);
     document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  /**
+   * Loading Protection
+   */
+  if (!sessionChecked) {
+    return <div className="app">Loading...</div>;
+  }
+
 
   /**
    * Render the appropriate view based on current page state
@@ -1235,10 +1550,11 @@ useEffect(() => {
       return (
         <CustomerSignUpForm
           onBack={() => setPage('signup')}
-          onSuccess={() => {
-            setPage('home');
-            alert('Customer account created successfully. You can now book services.');
-          }}
+          onSuccess={(data) => {
+          setCurrentUser(data.user);
+          setPage('home');
+          alert('Customer account created successfully. You can now book services.');
+        }}
         />
       );
     }
@@ -1248,6 +1564,7 @@ useEffect(() => {
         <ProviderSignUpForm
           onBack={() => setPage('signup')}
           onSuccess={(data) => {
+            setCurrentUser(data.user);
             setProviderData(data);
             setPage('provider-dashboard');
           }}
@@ -1256,20 +1573,26 @@ useEffect(() => {
     }
 
     if (page === 'provider-dashboard') {
+
+      console.log("Provider Profile ID:", providerData?.profile?.provider_profile_id);
+      console.log("Services:", services);
+
       return (
         <ProviderDashboard
           provider={providerData}
-          onLogout={() => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setProviderData(null);
-            setPage('home');
-          }}
+          onLogout={handleLogout}
+          onHome={() => setPage('home')}
+          darkMode={darkMode}
+          onToggleTheme={toggleDark}
           services={services.filter((service) =>
             String(service.providerProfileId) === String(providerData?.profile?.provider_profile_id)
           )}
+          archivedServices={archivedServices}
+          fetchArchivedServices={fetchArchivedServices}
           onAddService={handleAddService}
           onDeleteService={handleDeleteService}
+          onArchiveService={handleArchiveService}
+          onUnarchiveService={handleUnarchiveService}
         />
       );
     }
@@ -1311,6 +1634,38 @@ useEffect(() => {
    */
   const isDashboard = page === 'provider-dashboard';
 
+  const handleDashboardClick = async () => {
+    if (currentUser?.role === 'provider') {
+      try {
+        const token = localStorage.getItem('token');
+
+        const res = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error);
+
+        setProviderData((prev) => ({
+          ...prev,
+          profile: data.data,
+        }));
+
+        setPage('provider-dashboard');
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load provider profile");
+      }
+
+      return;
+    }
+
+    alert('Please log in as a provider first.');
+  };
+
   /**
    * Render main application layout
    */
@@ -1323,6 +1678,9 @@ useEffect(() => {
           onSignUp={() => setPage('signup')}
           onLogin={() => setPage('login')}
           onHome={() => setPage('home')}
+          currentUser={currentUser}
+          onDashboard={handleDashboardClick}
+          onLogout={handleLogout}
         />
       )}
 
