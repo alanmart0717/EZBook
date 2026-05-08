@@ -1,0 +1,103 @@
+/* ── Search inside dashboard card ── */
+.cd-search-wrapper {
+  justify-content: stretch;
+  margin-bottom: 4px;
+}
+.cd-search-wrapper .search-bar {
+  max-width: 100%;
+}
+
+/* ── Category section inside card ── */
+.cd-category-section {
+  margin-top: 24px;
+}
+.cd-category-section .dash-card-title {
+  margin-bottom: 16px;
+}
+
+/* ── Provider list inside dashboard card ── */
+.cd-provider-list {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .cd-provider-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Appointment action buttons ── */
+.cd-appt-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Allow the appointment row to wrap on small screens */
+.cd-appt-item {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .cd-appt-item .service-item-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .cd-appt-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ── Cancel confirm modal ── */
+.cd-cancel-details {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cd-cancel-service {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.cd-cancel-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.cd-cancel-question {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* ── Cancellation success state ── */
+.cd-cancel-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 8px;
+  text-align: center;
+}
+.cd-cancel-success-icon { font-size: 2.5rem; }
+.cd-cancel-success-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.cd-cancel-success-sub {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}

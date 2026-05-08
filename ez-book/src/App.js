@@ -15,6 +15,7 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import ProviderDashboard from './ProviderDashboard';
+import ClientDashboard from './ClientDashboard';
 
 /**
  * Backend API base URL
@@ -1460,8 +1461,7 @@ export default function App() {
       setProviderData(data);
       setPage('provider-dashboard');
     } else {
-      setPage('home');
-      alert('Customer login successful. Customer dashboard is coming soon.');
+      setPage('client-dashboard');
     }
   };
 
@@ -1552,8 +1552,7 @@ export default function App() {
           onBack={() => setPage('signup')}
           onSuccess={(data) => {
           setCurrentUser(data.user);
-          setPage('home');
-          alert('Customer account created successfully. You can now book services.');
+          setPage('client-dashboard');
         }}
         />
       );
@@ -1568,6 +1567,20 @@ export default function App() {
             setProviderData(data);
             setPage('provider-dashboard');
           }}
+        />
+      );
+    }
+
+    if (page === 'client-dashboard') {
+      return (
+        <ClientDashboard
+          client={currentUser}
+          onLogout={handleLogout}
+          onHome={() => setPage('home')}
+          darkMode={darkMode}
+          onToggleTheme={toggleDark}
+          services={services}
+          onBook={handleBookClick}
         />
       );
     }
@@ -1632,7 +1645,7 @@ export default function App() {
   /**
    * Determine if currently on provider dashboard
    */
-  const isDashboard = page === 'provider-dashboard';
+  const isDashboard = page === 'provider-dashboard' || page === 'client-dashboard';
 
   const handleDashboardClick = async () => {
     if (currentUser?.role === 'provider') {
@@ -1663,7 +1676,12 @@ export default function App() {
       return;
     }
 
-    alert('Please log in as a provider first.');
+    if (currentUser) {
+      setPage('client-dashboard');
+      return;
+    }
+
+    alert('Please log in first.');
   };
 
   /**
