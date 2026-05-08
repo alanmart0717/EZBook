@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './ProviderDashboard.css';
+import MessagingUI from './MessagingUI';
 
 // ── Static Data ────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { id: 'history',      label: 'History',      icon: '📜' },
   { id: 'services',     label: 'My Services',  icon: '🛠️' },
   { id: 'availability', label: 'Availability', icon: '🗓️' },
+  { id: 'messages',     label: 'Messages',     icon: '💬' },
   { id: 'profile',      label: 'Profile',      icon: '👤' },
 ];
 
@@ -1108,6 +1110,7 @@ function ProviderDashboard({
           />
         );
       case 'availability': return <AvailabilitySection />;
+      case 'messages':     return <MessagingUI />;
       case 'profile': return <ProfileSection provider={provider} />;
       default:
         return (

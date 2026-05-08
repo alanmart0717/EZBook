@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import './ProviderDashboard.css';
 import './ClientDashboard.css';
+import MessagingUI from './MessagingUI';
 
 const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
 
 const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '🏠' },
   { id: 'appointments', label: 'Appointments', icon: '📅' },
+  { id: 'messages',     label: 'Messages',     icon: '💬' },
   { id: 'profile',      label: 'Profile',      icon: '👤' },
 ];
 
@@ -520,6 +522,7 @@ function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, se
   const renderSection = () => {
     switch (activeSection) {
       case 'appointments': return <AppointmentsSection services={services} onBook={onBook} />;
+      case 'messages':     return <MessagingUI />;
       case 'profile':      return <ProfileSection client={client} />;
       default:             return <DashboardSection services={services} onBook={onBook} client={client} />;
     }
