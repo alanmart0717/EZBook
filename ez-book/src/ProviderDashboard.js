@@ -600,192 +600,384 @@ function ServicesSection({
 }
 
 // ── Availability Section ───────────────────────────────────────────────────────
-// Lets providers add working hours so customers can book appointments during
-// available times. This connects to the provider availability backend routes.
 function AvailabilitySection() {
-  const [form, setForm] = useState({
-    day: '',
+  const [activeTab, setActiveTab] = useState('hours');
+
+  // ── Working Hours state ──
+  const [form, setForm] = useState({ day: '', startTime: '', endTime: '' });
+  const [availabilityList, setAvailabilityList] = useState([]);
+  const [hoursMessage, setHoursMessage] = useState('');
+  const [hoursLoading, setHoursLoading] = useState(false);
+
+  // ── Block Time Off state ──
+  const [blockForm, setBlockForm] = useState({
+    label: '',
+    repeatType: 'none',
+    blockDate: '',
+    dayOfWeek: '',
+    dayOfMonth: '',
     startTime: '',
     endTime: '',
   });
-
-  const [availabilityList, setAvailabilityList] = useState([]);
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [blockedList, setBlockedList] = useState([]);
+  const [blockMessage, setBlockMessage] = useState('');
+  const [blockLoading, setBlockLoading] = useState(false);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const setBlock = (field) => (e) => setBlockForm((f) => ({ ...f, [field]: e.target.value }));
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+
     const fetchAvailability = async () => {
       try {
-        const token = localStorage.getItem('token');
-
         const res = await fetch(`${API_BASE_URL}/api/provider/availability/me`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
-
         const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to load availability');
-        }
-
+        if (!res.ok) throw new Error(data.error || 'Failed to load availability');
         setAvailabilityList(data.data || []);
-
       } catch (err) {
         console.error(err);
-        setMessage(err.message);
+      }
+    };
+
+    const fetchBlockedTimes = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/provider/blocked-times/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load blocked times');
+        setBlockedList(data.data || []);
+      } catch (err) {
+        console.error(err);
       }
     };
 
     fetchAvailability();
+    fetchBlockedTimes();
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleHoursSubmit = async (e) => {
     e.preventDefault();
-
-    setLoading(true);
-    setMessage('');
-
+    setHoursLoading(true);
+    setHoursMessage('');
     try {
       const token = localStorage.getItem('token');
-
-      if (!token) {
-        throw new Error('You are not logged in');
-      }
-
+      if (!token) throw new Error('You are not logged in');
       const res = await fetch(`${API_BASE_URL}/api/provider/availability`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          day: form.day,
-          startTime: form.startTime,
-          endTime: form.endTime,
-          isAvailable: true,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ day: form.day, startTime: form.startTime, endTime: form.endTime, isAvailable: true }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to add availability');
-      }
-
+      if (!res.ok) throw new Error(data.error || 'Failed to add availability');
       setAvailabilityList((prev) => [...prev, data.data]);
-
-      setMessage('Availability added successfully!');
-      setForm({
-        day: '',
-        startTime: '',
-        endTime: '',
-      });
-
+      setHoursMessage('Working hours added!');
+      setForm({ day: '', startTime: '', endTime: '' });
     } catch (err) {
-      console.error(err);
-      setMessage(err.message);
+      setHoursMessage(err.message);
     } finally {
-      setLoading(false);
+      setHoursLoading(false);
     }
   };
+
+  const handleDeleteAvailability = async (availabilityId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/provider/availability/${availabilityId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove');
+      }
+      setAvailabilityList((prev) => prev.filter((s) => s.availability_id !== availabilityId));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleBlockSubmit = async (e) => {
+    e.preventDefault();
+    setBlockLoading(true);
+    setBlockMessage('');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('You are not logged in');
+      const res = await fetch(`${API_BASE_URL}/api/provider/blocked-times`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          label: blockForm.label,
+          repeatType: blockForm.repeatType,
+          blockDate:   blockForm.repeatType === 'none'    ? blockForm.blockDate              : null,
+          dayOfWeek:   blockForm.repeatType === 'weekly'  ? blockForm.dayOfWeek              : null,
+          dayOfMonth:  blockForm.repeatType === 'monthly' ? parseInt(blockForm.dayOfMonth, 10) : null,
+          startTime: blockForm.startTime,
+          endTime:   blockForm.endTime,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to block time');
+      setBlockedList((prev) => [data.data, ...prev]);
+      setBlockMessage('Time blocked successfully!');
+      setBlockForm({ label: '', repeatType: 'none', blockDate: '', dayOfWeek: '', dayOfMonth: '', startTime: '', endTime: '' });
+    } catch (err) {
+      setBlockMessage(err.message);
+    } finally {
+      setBlockLoading(false);
+    }
+  };
+
+  const handleDeleteBlock = async (blockedTimeId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/provider/blocked-times/${blockedTimeId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove block');
+      }
+      setBlockedList((prev) => prev.filter((b) => b.blocked_time_id !== blockedTimeId));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const blockScheduleLabel = (b) => {
+    if (b.repeat_type === 'weekly') {
+      const day = b.day_of_week;
+      return `Every ${day.charAt(0).toUpperCase() + day.slice(1)}`;
+    }
+    if (b.repeat_type === 'monthly') return `Monthly, day ${b.day_of_month}`;
+    if (b.block_date) {
+      return new Date(`${b.block_date}T00:00:00`).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+      });
+    }
+    return 'One-time';
+  };
+
+  const DAY_OPTIONS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 
   return (
     <div className="dash-section">
       <h2 className="dash-section-heading">Availability</h2>
 
-      <div className="dash-card">
-        <form className="signup-form" onSubmit={handleSubmit}>
-          <label className="form-label">
-            Day
-            <select
-              className="form-input form-select"
-              value={form.day}
-              onChange={set('day')}
-              required
-            >
-              <option value="" disabled>Select a day</option>
-              <option value="monday">Monday</option>
-              <option value="tuesday">Tuesday</option>
-              <option value="wednesday">Wednesday</option>
-              <option value="thursday">Thursday</option>
-              <option value="friday">Friday</option>
-              <option value="saturday">Saturday</option>
-              <option value="sunday">Sunday</option>
-            </select>
-          </label>
-
-          <div className="form-row">
-            <label className="form-label">
-              Start Time
-              <input
-                className="form-input"
-                type="time"
-                value={form.startTime}
-                onChange={set('startTime')}
-                required
-              />
-            </label>
-
-            <label className="form-label">
-              End Time
-              <input
-                className="form-input"
-                type="time"
-                value={form.endTime}
-                onChange={set('endTime')}
-                required
-              />
-            </label>
-          </div>
-
-          {message && (
-            <p className="form-error">
-              {message}
-            </p>
-          )}
-
-          <button type="submit" className="btn-primary form-submit" disabled={loading}>
-            {loading ? 'Adding Availability...' : 'Add Availability'}
-          </button>
-        </form>
+      <div className="dash-filter-row">
+        <button
+          className={`dash-filter-btn${activeTab === 'hours' ? ' active' : ''}`}
+          onClick={() => setActiveTab('hours')}
+        >
+          Working Hours
+        </button>
+        <button
+          className={`dash-filter-btn${activeTab === 'blocks' ? ' active' : ''}`}
+          onClick={() => setActiveTab('blocks')}
+        >
+          Block Time Off
+        </button>
       </div>
 
-      <div className="dash-card" style={{ marginTop: '1rem' }}>
-        <h3 className="dash-card-title">Current Availability</h3>
+      {activeTab === 'hours' && (
+        <>
+          <div className="dash-card">
+            <form className="signup-form" onSubmit={handleHoursSubmit}>
+              <label className="form-label">
+                Day
+                <select
+                  className="form-input form-select"
+                  value={form.day}
+                  onChange={set('day')}
+                  required
+                >
+                  <option value="" disabled>Select a day</option>
+                  {DAY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                  ))}
+                </select>
+              </label>
 
-        {availabilityList.length === 0 ? (
-          <div className="dash-empty">
-            <span>🗓️</span>
-            <p>No availability added yet.</p>
-          </div>
-        ) : (
-          <div className="service-list">
-            {availabilityList.map((slot) => (
-              <div key={slot.availability_id} className="dash-card service-item">
-                <div className="service-item-info">
-                  <h3 className="service-item-name">
-                    {slot.day.charAt(0).toUpperCase() + slot.day.slice(1)}
-                  </h3>
-                  <p className="service-item-type">
-                    Available
-                  </p>
-                </div>
-
-                <div className="service-item-meta">
-                  <span className="service-item-duration">
-                    {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                  </span>
-                </div>
+              <div className="form-row">
+                <label className="form-label">
+                  Start Time
+                  <input className="form-input" type="time" value={form.startTime} onChange={set('startTime')} required />
+                </label>
+                <label className="form-label">
+                  End Time
+                  <input className="form-input" type="time" value={form.endTime} onChange={set('endTime')} required />
+                </label>
               </div>
-            ))}
+
+              {hoursMessage && <p className="form-error">{hoursMessage}</p>}
+
+              <button type="submit" className="btn-primary form-submit" disabled={hoursLoading}>
+                {hoursLoading ? 'Adding...' : 'Add Working Hours'}
+              </button>
+            </form>
           </div>
-        )}
-      </div>
+
+          <div className="dash-card">
+            <h3 className="dash-card-title">Current Working Hours</h3>
+            {availabilityList.length === 0 ? (
+              <div className="dash-empty">
+                <span>🗓️</span>
+                <p>No working hours added yet.</p>
+              </div>
+            ) : (
+              <div className="service-list">
+                {availabilityList.map((slot) => (
+                  <div key={slot.availability_id} className="dash-card service-item">
+                    <div className="service-item-info">
+                      <h3 className="service-item-name">
+                        {slot.day.charAt(0).toUpperCase() + slot.day.slice(1)}
+                      </h3>
+                      <p className="service-item-type">Available</p>
+                    </div>
+                    <div className="service-item-meta">
+                      <span className="service-item-duration">
+                        {formatTime(slot.start_time)} – {formatTime(slot.end_time)}
+                      </span>
+                      <button className="btn-outline" onClick={() => handleDeleteAvailability(slot.availability_id)}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {activeTab === 'blocks' && (
+        <>
+          <div className="dash-card">
+            <form className="signup-form" onSubmit={handleBlockSubmit}>
+              <label className="form-label">
+                Reason (optional)
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="e.g. Lunch Break, Personal"
+                  value={blockForm.label}
+                  onChange={setBlock('label')}
+                />
+              </label>
+
+              <label className="form-label">
+                Repeat
+                <select
+                  className="form-input form-select"
+                  value={blockForm.repeatType}
+                  onChange={setBlock('repeatType')}
+                >
+                  <option value="none">One-time (specific date)</option>
+                  <option value="weekly">Weekly (repeats every week)</option>
+                  <option value="monthly">Monthly (same day each month)</option>
+                </select>
+              </label>
+
+              {blockForm.repeatType === 'none' && (
+                <label className="form-label">
+                  Date
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={blockForm.blockDate}
+                    onChange={setBlock('blockDate')}
+                    required
+                  />
+                </label>
+              )}
+
+              {blockForm.repeatType === 'weekly' && (
+                <label className="form-label">
+                  Day of Week
+                  <select
+                    className="form-input form-select"
+                    value={blockForm.dayOfWeek}
+                    onChange={setBlock('dayOfWeek')}
+                    required
+                  >
+                    <option value="" disabled>Select a day</option>
+                    {DAY_OPTIONS.map((d) => (
+                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {blockForm.repeatType === 'monthly' && (
+                <label className="form-label">
+                  Day of Month
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="1"
+                    max="31"
+                    placeholder="e.g. 15"
+                    value={blockForm.dayOfMonth}
+                    onChange={setBlock('dayOfMonth')}
+                    required
+                  />
+                </label>
+              )}
+
+              <div className="form-row">
+                <label className="form-label">
+                  Start Time
+                  <input className="form-input" type="time" value={blockForm.startTime} onChange={setBlock('startTime')} required />
+                </label>
+                <label className="form-label">
+                  End Time
+                  <input className="form-input" type="time" value={blockForm.endTime} onChange={setBlock('endTime')} required />
+                </label>
+              </div>
+
+              {blockMessage && <p className="form-error">{blockMessage}</p>}
+
+              <button type="submit" className="btn-primary form-submit" disabled={blockLoading}>
+                {blockLoading ? 'Blocking...' : 'Block Time'}
+              </button>
+            </form>
+          </div>
+
+          <div className="dash-card">
+            <h3 className="dash-card-title">Blocked Times</h3>
+            {blockedList.length === 0 ? (
+              <div className="dash-empty">
+                <span>🚫</span>
+                <p>No blocked times yet. Use this to prevent bookings during breaks or personal time.</p>
+              </div>
+            ) : (
+              <div className="service-list">
+                {blockedList.map((b) => (
+                  <div key={b.blocked_time_id} className="dash-card service-item">
+                    <div className="service-item-info">
+                      <h3 className="service-item-name">{b.label || 'Blocked Time'}</h3>
+                      <p className="service-item-type">{blockScheduleLabel(b)}</p>
+                    </div>
+                    <div className="service-item-meta">
+                      <span className="service-item-duration">
+                        {formatTime(b.start_time)} – {formatTime(b.end_time)}
+                      </span>
+                      <button className="btn-outline" onClick={() => handleDeleteBlock(b.blocked_time_id)}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
