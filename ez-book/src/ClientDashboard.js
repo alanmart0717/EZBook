@@ -3,7 +3,7 @@ import './ProviderDashboard.css';
 import './ClientDashboard.css';
 import MessagingUI from './MessagingUI';
 
-const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
+const API_BASE_URL = 'http://localhost:5000';
 
 const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '🏠' },
@@ -40,6 +40,35 @@ const formatDate = (dateValue) => {
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Tomorrow';
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+// Check if appointment can still be cancelled/rescheduled
+// Must be at least 8 hours before start time
+const canCancelAppointment = (appointment) => {
+  const date = new Date(appointment.appointment_date);
+
+  const [hours, minutes] = String(appointment.start_time)
+    .split("-")[0]
+    .split(":")
+    .map(Number);
+
+  // Build local datetime correctly (no timezone shifting)
+  const appointmentDateTime = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    hours,
+    minutes
+  );
+
+  const now = new Date();
+  const hoursUntil = (appointmentDateTime - now) / (1000 * 60 * 60);
+
+  console.log("NOW:", now);
+  console.log("APPOINTMENT:", appointmentDateTime);
+  console.log("HOURS UNTIL:", hoursUntil);
+
+  return hoursUntil >= 8;
 };
 
 // ── Search Bar ─────────────────────────────────────────────────────────────────
@@ -245,6 +274,29 @@ function CancelConfirmModal({ appointment, services, onSuccess, onBack }) {
   );
 }
 
+function NoticeModal({ title, message, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">{title}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <p style={{ marginTop: "16px", color: "var(--text-secondary)" }}>
+          {message}
+        </p>
+
+        <div className="modal-actions">
+          <button className="btn-primary" onClick={onClose}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Appointments Section ───────────────────────────────────────────────────────
 function AppointmentsSection({ services, onBook }) {
   const [tab, setTab] = useState('upcoming');
@@ -254,6 +306,7 @@ function AppointmentsSection({ services, onBook }) {
   const [error, setError] = useState('');
   const [cancelTarget, setCancelTarget] = useState(null);
   const [editLoading, setEditLoading] = useState(null);
+  const [noticeModal, setNoticeModal] = useState(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -302,33 +355,38 @@ function AppointmentsSection({ services, onBook }) {
     setCancelTarget(null);
   };
 
-  const handleEditTime = async (appointment) => {
-    setEditLoading(appointment.appointment_id);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(
-        `${API_BASE_URL}/api/appointments/${appointment.appointment_id}/cancel`,
-        { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to release appointment');
-
-      setUpcoming((prev) => prev.filter((b) => b.appointment_id !== appointment.appointment_id));
-
-      const service = services.find(
-        (s) => String(s.serviceId || s.id) === String(appointment.service_id)
-      );
-
-      if (service) {
-        onBook(service);
-      } else {
-        alert('Service is no longer available. Search for it from the Dashboard tab.');
-      }
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setEditLoading(null);
+  // Reschedule = choose new time first, then cancel old appointment after booking succeeds
+  const handleReschedule = (appointment) => {
+    if (!canCancelAppointment(appointment)) {
+      setNoticeModal({
+        title: "Reschedule Unavailable",
+        message:
+          "You can no longer reschedule this appointment because it is less than 8 hours away.",
+      });
+      return;
     }
+
+    const service = services.find(
+      (s) => String(s.serviceId || s.id) === String(appointment.service_id)
+    );
+
+    if (!service) {
+      setNoticeModal({
+        title: "Service Unavailable",
+        message:
+          "This service is no longer available. Please choose another service from the Dashboard tab.",
+      });
+      return;
+    }
+
+    const rescheduleService = {
+      ...service,
+      rescheduleAppointmentId: appointment.appointment_id,
+    };
+
+    console.log("PASSING RESCHEDULE SERVICE:", rescheduleService);
+
+    onBook(rescheduleService);
   };
 
   const renderList = (list, emptyIcon, emptyMsg, showActions = false) => {
@@ -352,8 +410,16 @@ function AppointmentsSection({ services, onBook }) {
           return (
             <div key={b.appointment_id} className="dash-card service-item cd-appt-item">
               <div className="service-item-info">
-                <h3 className="service-item-name">{service?.serviceName || 'Appointment'}</h3>
-                <p className="service-item-type">{service?.providerName || 'Provider'}</p>
+                <h3 className="service-item-name">
+                  {service?.serviceName || b.service_name || "Appointment"}
+                </h3>
+
+                <p className="service-item-type">
+                  {service?.providerName ||
+                    `${b.provider_first_name ?? ""} ${b.provider_last_name ?? ""}`.trim() ||
+                    b.business_name ||
+                    "Provider"}
+                </p>
               </div>
               <div className="service-item-meta">
                 <span className="service-item-duration">{formatDate(b.appointment_date)}</span>
@@ -365,17 +431,32 @@ function AppointmentsSection({ services, onBook }) {
                   <div className="cd-appt-actions">
                     <button
                       className="btn-outline"
-                      onClick={() => setCancelTarget(b)}
+                      onClick={() => {
+                        if (!canCancelAppointment(b)) {
+                          setNoticeModal({
+                            title: "Cancellation Unavailable",
+                            message:
+                              "You can no longer cancel this appointment because it is less than 8 hours away.",
+                          });
+                          return;
+                        }
+
+                        setCancelTarget(b);
+                      }}
                     >
                       Cancel
                     </button>
-                    <button
-                      className="btn-primary"
-                      onClick={() => handleEditTime(b)}
-                      disabled={editLoading === b.appointment_id}
-                    >
-                      {editLoading === b.appointment_id ? 'Releasing...' : 'Edit Time'}
-                    </button>
+                    {b.status === "confirmed" && (
+                      <button
+                        className="btn-primary"
+                        onClick={() => handleReschedule(b)}
+                        disabled={editLoading === b.appointment_id}
+                      >
+                        {editLoading === b.appointment_id
+                          ? "Rescheduling..."
+                          : "Reschedule"}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -418,6 +499,14 @@ function AppointmentsSection({ services, onBook }) {
           : renderList(past, '📜', 'No past appointments yet.')
         }
       </div>
+
+      {noticeModal && (
+        <NoticeModal
+          title={noticeModal.title}
+          message={noticeModal.message}
+          onClose={() => setNoticeModal(null)}
+        />
+      )}
 
       {cancelTarget && (
         <CancelConfirmModal

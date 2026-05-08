@@ -1,5 +1,29 @@
 const db = require("../db/connection");
 
+const Availability = require("./availability.model");
+
+const BUFFER_MINUTES = 10;
+
+const timeToMinutes = (timeValue) => {
+    if (!timeValue) return 0;
+
+    const cleanTime = String(timeValue).split("-")[0];
+    const [hours, minutes] = cleanTime.split(":").map(Number);
+
+    return hours * 60 + minutes;
+};
+
+const minutesToTime = (totalMinutes) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+};
+
+const timesOverlap = (startA, endA, startB, endB) => {
+    return startA < endB && endA > startB;
+};
+
 // Create appointment
 const createAppointment = async (
     customerId,
@@ -52,15 +76,16 @@ const checkAppointmentConflict = async (
         WHERE provider_profile_id = $1
         AND appointment_date = $2
         AND status IN ('pending', 'confirmed')
-        AND start_time < $4
-        AND end_time > $3
+        AND start_time < ($4::time + ($5 || ' minutes')::interval)
+        AND (end_time::time + ($5 || ' minutes')::interval) > $3::time
     `;
 
     const values = [
         providerProfileId,
         appointmentDate,
         startTime,
-        endTime
+        endTime,
+        BUFFER_MINUTES
     ];
 
     const result = await db.query(query, values);
@@ -80,6 +105,89 @@ const getBookedAppointmentsByDate = async (providerProfileId, appointmentDate) =
 
     const result = await db.query(query, [providerProfileId, appointmentDate]);
     return result.rows;
+};
+
+
+const getAvailableTimes = async (
+    providerProfileId,
+    serviceId,
+    appointmentDate
+) => {
+    // Get service duration
+    const serviceResult = await db.query(
+        `
+        SELECT duration_minutes
+        FROM services
+        WHERE service_id = $1
+        `,
+        [serviceId]
+    );
+
+    if (serviceResult.rows.length === 0) {
+        throw new Error("Service not found");
+    }
+
+    const serviceDuration = Number(serviceResult.rows[0].duration_minutes);
+
+    console.log("SERVICE ID:", serviceId);
+    console.log("SERVICE DURATION:", serviceDuration);
+    console.log("BUFFER:", BUFFER_MINUTES);
+  
+    const availableTimes = [];
+
+    // Get provider availability for this date
+    const availabilitySlots = await Availability.getAvailabilityByDate(
+        providerProfileId,
+        appointmentDate
+    );
+
+    if (availabilitySlots.length === 0) {
+        return [];
+    }
+
+    // Get booked appointments for this date
+    const bookedAppointments = await getBookedAppointmentsByDate(
+        providerProfileId,
+        appointmentDate
+    );
+
+    const bookedRanges = bookedAppointments.map((appt) => ({
+        start: timeToMinutes(appt.start_time),
+        end: timeToMinutes(appt.end_time) + BUFFER_MINUTES
+    }));
+
+    // Generate dynamic slots
+    for (const slot of availabilitySlots) {
+        const availableStart = timeToMinutes(slot.start_time);
+        const availableEnd = timeToMinutes(slot.end_time);
+
+        let currentStart = availableStart;
+
+        while (currentStart + serviceDuration <= availableEnd) {
+            const currentEnd = currentStart + serviceDuration;
+
+            const hasConflict = bookedRanges.some((booked) =>
+                timesOverlap(
+                    currentStart,
+                    currentEnd,
+                    booked.start,
+                    booked.end
+                )
+            );
+
+            if (!hasConflict) {
+                availableTimes.push(minutesToTime(currentStart));
+            }
+
+            currentStart += serviceDuration + BUFFER_MINUTES;
+        }
+    }
+
+    const uniqueAvailableTimes = [...new Set(availableTimes)].sort();
+
+    console.log("FINAL AVAILABLE TIMES:", uniqueAvailableTimes);
+
+    return uniqueAvailableTimes;
 };
 
 const cancelFutureAppointmentsByService = async (serviceId) => {
@@ -132,15 +240,28 @@ const getAppointmentsByProvider = async (providerProfileId) => {
 
 // Get appointments for customer
 const getAppointmentsByCustomer = async (customerId) => {
-    const query = `
-        SELECT *
-        FROM appointments
-        WHERE customer_id = $1
-        ORDER BY appointment_date, start_time
-    `;
+  const query = `
+    SELECT
+      a.*,
+      s.service_name,
+      s.duration_minutes,
+      s.price,
+      p.business_name,
+      u.first_name AS provider_first_name,
+      u.last_name AS provider_last_name
+    FROM appointments a
+    JOIN services s 
+      ON a.service_id = s.service_id
+    JOIN provider_profiles p 
+      ON a.provider_profile_id = p.provider_profile_id
+    JOIN users u 
+      ON p.user_id = u.user_id
+    WHERE a.customer_id = $1
+    ORDER BY a.appointment_date, a.start_time
+  `;
 
-    const result = await db.query(query, [customerId]);
-    return result.rows;
+  const result = await db.query(query, [customerId]);
+  return result.rows;
 };
 
 const updateAppointmentStatus = async (appointmentId, status) => {
@@ -198,18 +319,19 @@ const getProviderAppointmentHistory = async (providerProfileId) => {
       a.end_time,
       a.status,
       a.notes,
+      a.updated_at,
       u.first_name,
       u.last_name,
       s.service_name
     FROM appointments a
-    JOIN users u ON a.customer_id = u.user_id
-    JOIN services s ON a.service_id = s.service_id
+    LEFT JOIN users u ON a.customer_id = u.user_id
+    LEFT JOIN services s ON a.service_id = s.service_id
     WHERE a.provider_profile_id = $1
       AND (
         a.status = 'cancelled'
-        OR a.appointment_date < CURRENT_DATE
+        OR a.appointment_date::date < CURRENT_DATE
       )
-    ORDER BY a.appointment_date DESC, a.start_time DESC
+    ORDER BY a.updated_at DESC
   `;
 
   const result = await db.query(query, [providerProfileId]);
@@ -220,6 +342,7 @@ module.exports = {
     createAppointment,
     checkAppointmentConflict,
     getBookedAppointmentsByDate,
+    getAvailableTimes,
     cancelFutureAppointmentsByService,
     getAppointmentById,
     getAppointmentsByProvider,

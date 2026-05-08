@@ -74,6 +74,8 @@ const getMyProviderAppointmentHistory = async (req, res) => {
       });
     }
 
+    console.log("HISTORY PROVIDER PROFILE ID:", provider.provider_profile_id);
+
     const history = await Appointment.getProviderAppointmentHistory(
       provider.provider_profile_id
     );
@@ -181,6 +183,34 @@ const cancelAppointment = async (req, res) => {
   }
 };
 
+const getAvailableTimes = async (req, res) => {
+  try {
+    const { providerProfileId, serviceId, appointmentDate } = req.query;
+
+    if (!providerProfileId || !serviceId || !appointmentDate) {
+      return res.status(400).json({
+        error: "providerProfileId, serviceId, and appointmentDate are required"
+      });
+    }
+
+    const times = await Appointment.getAvailableTimes(
+      providerProfileId,
+      serviceId,
+      appointmentDate
+    );
+
+    res.status(200).json({
+      data: times
+    });
+
+  } catch (err) {
+    console.error("GET AVAILABLE TIMES ERROR:", err);
+    res.status(500).json({
+      error: err.message
+    });
+  }
+};
+
 module.exports = {
     createAppointment,
     getMyProviderAppointments,
@@ -188,5 +218,6 @@ module.exports = {
     getMyProviderAppointmentHistory,
     acceptAppointment,
     declineAppointment,
-    cancelAppointment
+    cancelAppointment,
+    getAvailableTimes
 };

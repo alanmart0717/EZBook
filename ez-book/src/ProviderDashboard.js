@@ -5,7 +5,7 @@ import MessagingUI from './MessagingUI';
 // ── Static Data ────────────────────────────────────────────────────────────────
 
 // Backend API base URL. Backend server runs on port 5000 by default.
-const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
+const API_BASE_URL = 'http://localhost:5000';
 
 // Drives the sidebar and mobile bottom nav. Add a new entry here to add a new section.
 const NAV_ITEMS = [

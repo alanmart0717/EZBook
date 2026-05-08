@@ -12,7 +12,7 @@
  * - Navigation between different app views
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import ProviderDashboard from './ProviderDashboard';
 import ClientDashboard from './ClientDashboard';
@@ -21,7 +21,7 @@ import ClientDashboard from './ClientDashboard';
  * Backend API base URL
  * Backend server runs on port 5000 by default
  */
-const API_BASE_URL = 'https://ezbook-x54y.onrender.com';
+const API_BASE_URL = 'http://localhost:5000';
 
 /**
  * Timeout helper
@@ -659,6 +659,31 @@ const toStandardTime = (t) => {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 };
 
+
+
+function NoticeModal({ title, message, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">{title}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <p style={{ marginTop: "16px", color: "var(--text-secondary)" }}>
+          {message}
+        </p>
+
+        <div className="modal-actions">
+          <button className="btn-primary" onClick={onClose}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * BookingModal Component - Customer booking form
  *
@@ -666,7 +691,11 @@ const toStandardTime = (t) => {
  * and time, then creates an appointment through the backend.
  */
 function BookingModal({ service, onClose }) {
-  const todayDate = new Date();
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
   todayDate.setHours(0, 0, 0, 0);
 
   const [step, setStep] = useState('calendar');
@@ -683,8 +712,11 @@ function BookingModal({ service, onClose }) {
   const [loading, setLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState('');
+  const providerId = service?.providerProfileId;
+  const serviceId = service?.serviceId;
 
   useEffect(() => {
+    if (!providerId || !serviceId) return;
     const fetchMonthAvailability = async () => {
       setDatesLoading(true);
       const { year, month } = currentMonth;
@@ -705,7 +737,7 @@ function BookingModal({ service, onClose }) {
         const results = await Promise.all(
           dateStrings.map(async (dateStr) => {
             try {
-              const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${service.providerProfileId}&serviceId=${service.serviceId}&appointmentDate=${dateStr}`;
+              const url = `${API_BASE_URL}/api/appointments/available-times?providerProfileId=${providerId}&serviceId=${serviceId}&appointmentDate=${dateStr}`;
               const res = await fetch(url);
               const data = await res.json();
               return res.ok && data.data?.length > 0 ? dateStr : null;
@@ -723,7 +755,7 @@ function BookingModal({ service, onClose }) {
     };
 
     fetchMonthAvailability();
-  }, [currentMonth]);
+  }, [currentMonth, providerId, serviceId, todayDate]);
 
   const fetchAvailableTimes = async (date) => {
     try {
@@ -790,7 +822,21 @@ function BookingModal({ service, onClose }) {
         throw new Error(data.error || 'Booking failed');
       }
 
-      alert('Booking created successfully!');
+      if (service.rescheduleAppointmentId) {
+      await fetch(`${API_BASE_URL}/api/appointments/${service.rescheduleAppointmentId}/cancel`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
+
+      setNoticeModal({
+        title: service.rescheduleAppointmentId ? "Appointment Rescheduled" : "Booking Created",
+        message: service.rescheduleAppointmentId
+          ? "Your appointment was rescheduled successfully."
+          : "Your booking was created successfully.",
+      });
       onClose();
 
     } catch (err) {
@@ -889,8 +935,12 @@ function BookingModal({ service, onClose }) {
             {error && <p className="form-error">{error}</p>}
 
             <div className="modal-actions">
-              <button type="button" className="btn-outline" onClick={onClose}>
-                Cancel
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={onClose}
+              >
+                {service.rescheduleAppointmentId ? "Cancel Reschedule" : "Cancel"}
               </button>
               <button
                 type="button"
@@ -1354,7 +1404,10 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert(err.message);
+      setNoticeModal({
+        title: "Something went wrong",
+        message: err.message,
+      });
     }
   };
 
@@ -1392,7 +1445,10 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert(err.message);
+      setNoticeModal({
+        title: "Something went wrong",
+        message: err.message,
+      });
     }
   };
 
@@ -1433,7 +1489,10 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert(err.message);
+      setNoticeModal({
+        title: "Something went wrong",
+        message: err.message,
+      });
     }
   };
 
@@ -1469,8 +1528,9 @@ export default function App() {
    * Handle booking button click
    */
   const handleBookClick = (service) => {
-    setSelectedService(service);
-  };
+  console.log("BOOK/RESCHEDULE SERVICE:", service);
+  setSelectedService(service);
+};
 
   /**
    * Toggle dark mode and update document theme attribute
@@ -1677,6 +1737,15 @@ export default function App() {
       )}
 
       {!isDashboard && <Footer />}
+
+      {noticeModal && (
+        <NoticeModal
+          title={noticeModal.title}
+          message={noticeModal.message}
+          onClose={() => setNoticeModal(null)}
+        />
+      )}
+
     </div>
   );
 }
