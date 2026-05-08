@@ -574,6 +574,47 @@ a { text-decoration: none; color: inherit; }
   color: #fff;
 }
 
+/* ── Join Section ── */
+.join-section { text-align: center; }
+.join-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-top: -20px;
+  margin-bottom: 40px;
+}
+.join-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+.join-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 28px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: border-color .15s, box-shadow .15s, background .2s;
+}
+.join-card:hover {
+  border-color: var(--cyan);
+  box-shadow: var(--shadow-md);
+}
+.join-card-icon { font-size: 2.4rem; }
+.join-card-title { font-size: 1.15rem; font-weight: 700; color: var(--text); }
+.join-card-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  text-align: center;
+}
+.join-card-btn { margin-top: 8px; width: 100%; }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .provider-list { grid-template-columns: repeat(2, 1fr); }
@@ -586,4 +627,5 @@ a { text-decoration: none; color: inherit; }
   .signup-container { padding: 32px 20px; }
   .signup-choice-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
+  .join-cards { grid-template-columns: 1fr; }
 }

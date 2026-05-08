@@ -956,58 +956,6 @@ function BookingModal({ service, onClose }) {
 }
 
 /**
- * SearchBar Component - Service/provider search input
- */
-function SearchBar({ query, onChange, onSearch }) {
-  const handleKey = (e) => {
-    if (e.key === 'Enter') onSearch();
-  };
-
-  return (
-    <div className="search-wrapper">
-      <div className="search-bar">
-        <span className="search-icon">🔍</span>
-        <input
-          type="text"
-          placeholder="Search for a service or provider..."
-          value={query}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKey}
-          aria-label="Search services or providers"
-        />
-        <button className="btn-primary search-btn" onClick={onSearch}>
-          Search
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * CategoryGrid Component - Browse services by category
- */
-function CategoryGrid({ onCategoryClick }) {
-  return (
-    <section className="section" id="services">
-      <h2 className="section-title">Browse by Category</h2>
-
-      <div className="category-grid">
-        {SERVICE_CATEGORIES.map((cat) => (
-          <button
-            key={cat.id}
-            className="category-card"
-            onClick={() => onCategoryClick(cat.label)}
-          >
-            <span className="category-icon">{cat.icon}</span>
-            <span className="category-label">{cat.label}</span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/**
  * ProviderCard Component - Individual service provider listing
  */
 function ProviderCard({ service, onBook }) {
@@ -1109,6 +1057,38 @@ function HowItWorks() {
 }
 
 /**
+ * JoinSection Component - CTA for new client and provider sign-ups
+ */
+function JoinSection({ onSignUpClient, onSignUpProvider }) {
+  return (
+    <section className="section join-section">
+      <h2 className="section-title">Are you a provider or ready to support your local businesses?</h2>
+      <p className="join-subtitle">Join EZBook today and start connecting.</p>
+
+      <div className="join-cards">
+        <div className="join-card">
+          <span className="join-card-icon">🧑‍💼</span>
+          <h3 className="join-card-title">I'm a Provider</h3>
+          <p className="join-card-desc">List your services and start accepting bookings from local customers.</p>
+          <button className="btn-primary join-card-btn" onClick={onSignUpProvider}>
+            Sign Up as Provider
+          </button>
+        </div>
+
+        <div className="join-card">
+          <span className="join-card-icon">📅</span>
+          <h3 className="join-card-title">I'm a Client</h3>
+          <p className="join-card-desc">Discover and book trusted local service providers near you.</p>
+          <button className="btn-outline join-card-btn" onClick={onSignUpClient}>
+            Sign Up as Client
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
  * Footer Component - Page footer with branding and copyright
  */
 function Footer() {
@@ -1131,8 +1111,6 @@ export default function App() {
   /**
    * State Management
    */
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeQuery, setActiveQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [page, setPage] = useState('home');
   const [providerData, setProviderData] = useState(null);
@@ -1499,23 +1477,6 @@ export default function App() {
   };
 
   /**
-   * Execute search and scroll to results section
-   */
-  const handleSearch = () => {
-    setActiveQuery(searchQuery.trim());
-    document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  /**
-   * Handle category selection
-   */
-  const handleCategoryClick = (label) => {
-    setSearchQuery(label);
-    setActiveQuery(label);
-    document.getElementById('providers')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  /**
    * Loading Protection
    */
   if (!sessionChecked) {
@@ -1622,21 +1583,17 @@ export default function App() {
             <p className="hero-subtitle">
               Discover and book trusted providers in your area — all in one place.
             </p>
-
-            <SearchBar
-              query={searchQuery}
-              onChange={setSearchQuery}
-              onSearch={handleSearch}
-            />
           </div>
         </section>
 
-        <CategoryGrid onCategoryClick={handleCategoryClick} />
         <HowItWorks />
         <ProvidersSection
           services={services}
-          searchQuery={activeQuery}
           onBook={handleBookClick}
+        />
+        <JoinSection
+          onSignUpClient={() => setPage('customer-form')}
+          onSignUpProvider={() => setPage('provider-form')}
         />
       </main>
     );
