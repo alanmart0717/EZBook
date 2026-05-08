@@ -21,7 +21,7 @@ import ClientDashboard from './ClientDashboard';
  * Backend API base URL
  * Backend server runs on port 5000 by default
  */
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 /**
  * Timeout helper
@@ -690,7 +690,7 @@ function NoticeModal({ title, message, onClose }) {
  * Loads provider availability, allows the customer to choose an available day
  * and time, then creates an appointment through the backend.
  */
-function BookingModal({ service, onClose }) {
+function BookingModal({ service, onClose, setNoticeModal }) {
   const todayDate = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -1177,6 +1177,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [archivedServices, setArchivedServices] = useState([]);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [noticeModal, setNoticeModal] = useState(null);
   /**
  * Restore logged-in user after page refresh
  */
@@ -1733,6 +1734,7 @@ export default function App() {
         <BookingModal
           service={selectedService}
           onClose={() => setSelectedService(null)}
+          setNoticeModal={setNoticeModal}
         />
       )}
 
