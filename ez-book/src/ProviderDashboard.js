@@ -19,7 +19,6 @@ const NAV_ITEMS = [
 // Placeholder stat cards — values will come from the backend once wired up.
 const STAT_CARDS = [
   { label: 'Total Bookings',  value: '0',      icon: '📅', note: 'All time' },
-  { label: 'Earnings',        value: '$0.00',  icon: '💰', note: 'This month' },
   { label: 'Avg Rating',      value: '—',      icon: '⭐', note: 'From reviews' },
   { label: 'Upcoming Today',  value: '0',      icon: '🕐', note: 'Scheduled' },
 ];
@@ -48,7 +47,6 @@ function StatCard({ stat }) {
 function AddServiceModal({ onClose, onUpload }) {
   // All four fields start empty; the form is controlled so nothing submits blank.
   const [form, setForm] = useState({
-    serviceType: '',
     serviceName: '',
     duration: '',
     price: '',
@@ -85,7 +83,6 @@ function AddServiceModal({ onClose, onUpload }) {
         },
         body: JSON.stringify({
           service_name: form.serviceName,
-          description: form.serviceType,
           duration_minutes: parseInt(form.duration, 10),
           price: parseFloat(form.price),
         }),
@@ -103,7 +100,6 @@ function AddServiceModal({ onClose, onUpload }) {
         id: data.data?.service_id || Date.now(),
         serviceId: data.data?.service_id,
         providerProfileId: data.data?.provider_profile_id,
-        serviceType: form.serviceType,
         serviceName: form.serviceName,
         duration: parseInt(form.duration, 10),
         price: parseFloat(form.price),
@@ -130,18 +126,6 @@ function AddServiceModal({ onClose, onUpload }) {
         </div>
 
         <form className="signup-form" onSubmit={handleSubmit}>
-          <label className="form-label">
-            Type of Service
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. Hair & Beauty"
-              value={form.serviceType}
-              onChange={set('serviceType')}
-              required
-            />
-          </label>
-
           <label className="form-label">
             Service Name
             <input
@@ -213,9 +197,7 @@ function AddServiceModal({ onClose, onUpload }) {
 // live stat cards, a recent bookings preview, and quick-action shortcuts.
 // onAddService is passed down so the quick-action "Add Service" button can open
 // the modal without navigating away from Overview.
-function OverviewSection({ provider, onAddService, onViewSchedule }) {
-  const [showModal, setShowModal] = useState(false);
-
+function OverviewSection({ provider }) {
   return (
     <div className="dash-section">
       {/* Welcome banner — uses the first letter of the provider's name as the avatar */}
@@ -239,35 +221,13 @@ function OverviewSection({ provider, onAddService, onViewSchedule }) {
         {STAT_CARDS.map((s) => <StatCard key={s.label} stat={s} />)}
       </div>
 
-      <div className="dash-row">
-        {/* Left column: recent bookings (empty state until backend is ready) */}
-        <div className="dash-card dash-card--flex1">
-          <h3 className="dash-card-title">Recent Bookings</h3>
-          <div className="dash-empty">
-            <span>📅</span>
-            <p>No bookings yet. Share your profile link to start receiving requests.</p>
-          </div>
-        </div>
-
-        {/* Right column: shortcuts — "Add Service" opens the modal inline */}
-        <div className="dash-card dash-card--sidebar">
-          <h3 className="dash-card-title">Quick Actions</h3>
-          <div className="dash-actions">
-            <button className="btn-primary dash-action-btn" onClick={() => setShowModal(true)}>
-              + Add Service
-            </button>
-            <button className="btn-outline dash-action-btn">Share Profile</button>
-            <button className="btn-outline dash-action-btn" onClick={onViewSchedule}>
-              View Schedule
-            </button>
-          </div>
+      <div className="dash-card">
+        <h3 className="dash-card-title">Recent Bookings</h3>
+        <div className="dash-empty">
+          <span>📅</span>
+          <p>No bookings yet. Share your profile link to start receiving requests.</p>
         </div>
       </div>
-
-      {/* Modal is conditionally rendered; unmounts fully when closed so form resets */}
-      {showModal && (
-        <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} />
-      )}
     </div>
   );
 }
@@ -961,8 +921,6 @@ function ProviderDashboard({
         return (
           <OverviewSection
             provider={provider}
-            onAddService={onAddService}
-            onViewSchedule={() => setActiveSection('availability')}
           />
         );
     }
