@@ -651,9 +651,17 @@ function ProviderSignUpForm({ onBack, onSuccess }) {
   );
 }
 
+const toStandardTime = (t) => {
+  if (!t) return '';
+  const [hour, minute] = t.split(':');
+  const d = new Date();
+  d.setHours(Number(hour), Number(minute), 0);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+};
+
 /**
  * BookingModal Component - Customer booking form
- * 
+ *
  * Loads provider availability, allows the customer to choose an available day
  * and time, then creates an appointment through the backend.
  */
@@ -922,7 +930,7 @@ function BookingModal({ service, onClose }) {
                     className={`time-slot${selectedTime === time ? ' time-slot--selected' : ''}`}
                     onClick={() => setSelectedTime(time)}
                   >
-                    {time}
+                    {toStandardTime(time)}
                   </button>
                 ))}
               </div>
