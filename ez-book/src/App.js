@@ -870,12 +870,20 @@ function BookingModal({ service, onClose, setNoticeModal }) {
     );
 
   const handleDateClick = (day) => {
-    if (!day) return;
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const date = new Date(year, month, day);
-    date.setHours(0, 0, 0, 0);
-    if (date < todayDate || !availableDates.has(dateStr)) return;
-    setSelectedDate(dateStr);
+      if (!day) return;
+
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      const date = new Date(year, month, day);
+      date.setHours(0, 0, 0, 0);
+
+      if (date < todayDate || !availableDates.has(dateStr)) return;
+
+      // Reset stale time state
+      setAvailableTimes([]);
+      setSelectedTime('');
+
+      setSelectedDate(dateStr);
   };
 
   return (

@@ -20,6 +20,10 @@ app.use("/api/provider/profile", providerProfileRoutes);
 const providerAvailabilityRoutes = require("./routes/provider.availability.routes");
 app.use("/api/provider/availability", providerAvailabilityRoutes);
 
+// Provider blocked time routes
+const blockedTimeRoutes = require("./routes/provider.blockedTime.routes");
+app.use("/api/provider/blocked-times", blockedTimeRoutes);
+
 // Service routes
 const serviceRoutes = require("./routes/service.routes");
 app.use("/api/services", serviceRoutes);

@@ -89,7 +89,63 @@ const checkAppointmentConflict = async (
     ];
 
     const result = await db.query(query, values);
-    return result.rows.length > 0;
+    if (result.rows.length > 0) {
+        return true;
+    }
+
+    const blockedQuery = `
+        SELECT *
+        FROM provider_blocked_times
+        WHERE provider_profile_id = $1
+    `;
+
+    const blockedResult = await db.query(
+        blockedQuery,
+        [providerProfileId]
+    );
+
+    const appointmentDay = new Date(`${appointmentDate}T00:00:00`)
+        .toLocaleDateString("en-US", { weekday: "long" })
+        .toLowerCase();
+
+    const appointmentDayOfMonth = new Date(`${appointmentDate}T00:00:00`).getDate();
+
+    const requestedStart = timeToMinutes(startTime);
+    const requestedEnd = timeToMinutes(endTime);
+
+    const hasBlockedTime = blockedResult.rows.some((block) => {
+        let appliesToDate = false;
+
+        if (block.repeat_type === "none" && block.block_date) {
+            const blockDate = String(block.block_date).split("T")[0];
+            appliesToDate = blockDate === appointmentDate;
+        }
+
+        if (block.repeat_type === "weekly") {
+            appliesToDate = block.day_of_week === appointmentDay;
+        }
+
+        if (block.repeat_type === "monthly") {
+            appliesToDate =
+                Number(block.day_of_month) === appointmentDayOfMonth;
+        }
+
+        if (!appliesToDate) {
+            return false;
+        }
+
+        const blockStart = timeToMinutes(block.start_time);
+        const blockEnd = timeToMinutes(block.end_time);
+
+        return timesOverlap(
+            requestedStart,
+            requestedEnd,
+            blockStart,
+            blockEnd
+        );
+    });
+
+    return hasBlockedTime;
 };
 
 // Get booked appointments for provider on a specific date
@@ -128,10 +184,6 @@ const getAvailableTimes = async (
     }
 
     const serviceDuration = Number(serviceResult.rows[0].duration_minutes);
-
-    console.log("SERVICE ID:", serviceId);
-    console.log("SERVICE DURATION:", serviceDuration);
-    console.log("BUFFER:", BUFFER_MINUTES);
   
     const availableTimes = [];
 
@@ -156,6 +208,18 @@ const getAvailableTimes = async (
         end: timeToMinutes(appt.end_time) + BUFFER_MINUTES
     }));
 
+    // Get provider blocked times
+    const blockedResult = await db.query(
+        `
+        SELECT *
+        FROM provider_blocked_times
+        WHERE provider_profile_id = $1
+        `,
+        [providerProfileId]
+    );
+
+    const blockedTimes = blockedResult.rows;
+
     // Generate dynamic slots
     for (const slot of availabilitySlots) {
         const availableStart = timeToMinutes(slot.start_time);
@@ -165,6 +229,49 @@ const getAvailableTimes = async (
 
         while (currentStart + serviceDuration <= availableEnd) {
             const currentEnd = currentStart + serviceDuration;
+
+            const appointmentDay = new Date(`${appointmentDate}T00:00:00`)
+                .toLocaleDateString("en-US", { weekday: "long" })
+                .toLowerCase();
+
+            const appointmentDayOfMonth = new Date(`${appointmentDate}T00:00:00`).getDate();
+
+            const hasBlockedTime = blockedTimes.some((block) => {
+                let appliesToDate = false;
+
+                if (block.repeat_type === "none" && block.block_date) {
+                    const blockDate = String(block.block_date).split("T")[0];
+                    appliesToDate = blockDate === appointmentDate;
+                }
+
+                if (block.repeat_type === "weekly") {
+                    appliesToDate = block.day_of_week === appointmentDay;
+                }
+
+                if (block.repeat_type === "monthly") {
+                    appliesToDate =
+                        Number(block.day_of_month) === appointmentDayOfMonth;
+                }
+
+                if (!appliesToDate) {
+                    return false;
+                }
+
+                const blockStart = timeToMinutes(block.start_time);
+                const blockEnd = timeToMinutes(block.end_time);
+
+                return timesOverlap(
+                    currentStart,
+                    currentEnd,
+                    blockStart,
+                    blockEnd
+                );
+            });
+
+            if (hasBlockedTime) {
+                currentStart += serviceDuration + BUFFER_MINUTES;
+                continue;
+            }
 
             const hasConflict = bookedRanges.some((booked) =>
                 timesOverlap(
@@ -184,8 +291,6 @@ const getAvailableTimes = async (
     }
 
     const uniqueAvailableTimes = [...new Set(availableTimes)].sort();
-
-    console.log("FINAL AVAILABLE TIMES:", uniqueAvailableTimes);
 
     return uniqueAvailableTimes;
 };

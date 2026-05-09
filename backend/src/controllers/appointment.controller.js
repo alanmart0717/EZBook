@@ -125,21 +125,22 @@ const declineAppointment = async (req, res) => {
     const appointment = await Appointment.getAppointmentById(appointmentId);
 
     if (!appointment) {
-        return res.status(404).json({ error: "Appointment not found" });
+      return res.status(404).json({ error: "Appointment not found" });
     }
 
     const providerProfile = await Provider.getProviderByUserId(req.user.userId);
 
     if (String(appointment.provider_profile_id) !== String(providerProfile.provider_profile_id)) {
-        return res.status(403).json({ error: "Not authorized" });
+      return res.status(403).json({ error: "Not authorized" });
     }
 
-    const updated = await Appointment.updateAppointmentStatus(appointmentId, "declined");
+    const updated = await Appointment.updateAppointmentStatus(appointmentId, "cancelled");
 
     res.json({ message: "Appointment declined", data: updated });
 
   } catch (err) {
-    res.status(500).json({ error: "Failed to decline appointment" });
+    console.error("DECLINE APPOINTMENT ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
