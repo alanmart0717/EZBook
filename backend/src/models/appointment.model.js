@@ -313,9 +313,14 @@ const cancelFutureAppointmentsByService = async (serviceId) => {
 const getAppointmentById = async (appointmentId) => {
   const result = await db.query(
     `
-    SELECT *
-    FROM appointments
-    WHERE appointment_id = $1
+    SELECT 
+      a.*,
+      s.service_name,
+      p.business_name
+    FROM appointments a
+    LEFT JOIN services s ON a.service_id = s.service_id
+    LEFT JOIN provider_profiles p ON a.provider_profile_id = p.provider_profile_id
+    WHERE a.appointment_id = $1
     `,
     [appointmentId]
   );

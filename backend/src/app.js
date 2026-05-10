@@ -32,6 +32,10 @@ app.use("/api/services", serviceRoutes);
 const appointmentRoutes = require("./routes/appointments.routes");
 app.use("/api/appointments", appointmentRoutes);
 
+// Notification routes
+const notificationRoutes = require("./routes/notification.routes");
+app.use("/api/notifications", notificationRoutes);
+
 // Health check
 app.get("/", (req, res) => {
     res.json({ message: "EZbook API is running" });

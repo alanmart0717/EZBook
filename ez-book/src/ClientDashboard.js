@@ -3,11 +3,12 @@ import './ProviderDashboard.css';
 import './ClientDashboard.css';
 import MessagingUI from './MessagingUI';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard',    icon: '🏠' },
   { id: 'appointments', label: 'Appointments', icon: '📅' },
+  { id: 'notifications', label: 'Notifications', icon: '🔔' },
   { id: 'messages',     label: 'Messages',     icon: '💬' },
   { id: 'profile',      label: 'Profile',      icon: '👤' },
 ];
@@ -604,16 +605,128 @@ function ProfileSection({ client }) {
   );
 }
 
+//── Notificationa ────────────────────────────────────────────
+function NotificationsSection({ notifications, onMarkRead }) {
+  return (
+    <div className="dash-section">
+      <h2 className="dash-section-heading">Notifications</h2>
+
+      <div className="dash-card">
+        {notifications.length === 0 ? (
+          <div className="dash-empty">
+            <span>🔔</span>
+            <p>No notifications yet.</p>
+          </div>
+        ) : (
+          <div className="service-list">
+            {notifications.map((n) => (
+              <div
+                key={n.notification_id}
+                className="dash-card service-item"
+              >
+                <div className="service-item-info">
+                  <h3 className="service-item-name">{n.title}</h3>
+                  <p className="service-item-type">{n.message}</p>
+                </div>
+
+                <div className="service-item-meta">
+                  {!n.is_read && (
+                    <span className="archived-label">New</span>
+                  )}
+
+                  <button
+                    className="btn-outline"
+                    onClick={() => onMarkRead(n.notification_id)}
+                    disabled={n.is_read}
+                    style={{ marginTop: "8px" }}
+                  >
+                    {n.is_read ? "Read" : "Mark Read"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Client Dashboard (root export) ────────────────────────────────────────────
 function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, services, onBook }) {
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [notifications, setNotifications] = useState([]);
+  
+  useEffect(() => {
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_BASE_URL}/api/notifications/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setNotifications(data.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  fetchNotifications();
+}, []);
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/notifications/${notificationId}/read`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to mark notification as read");
+      }
+
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.notification_id === notificationId
+            ? { ...n, is_read: true }
+            : n
+        )
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const renderSection = () => {
     switch (activeSection) {
-      case 'appointments': return <AppointmentsSection services={services} onBook={onBook} />;
-      case 'messages':     return <MessagingUI />;
-      case 'profile':      return <ProfileSection client={client} />;
-      default:             return <DashboardSection services={services} onBook={onBook} client={client} />;
+      case 'appointments':
+        return <AppointmentsSection services={services} onBook={onBook} />;
+
+      case 'notifications':
+        return <NotificationsSection notifications={notifications} onMarkRead={handleMarkNotificationRead} />;
+
+      case 'messages':
+        return <MessagingUI />;
+
+      case 'profile':
+        return <ProfileSection client={client} />;
+
+      default:
+        return <DashboardSection services={services} onBook={onBook} client={client} />;
     }
   };
 
@@ -649,6 +762,14 @@ function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, se
           </h1>
 
           <div className="dash-topbar-provider">
+            <div className="notification-bell">
+              🔔
+              {notifications.filter((n) => !n.is_read).length > 0 && (
+                <span className="notification-badge">
+                  {notifications.filter((n) => !n.is_read).length}
+                </span>
+              )}
+            </div>
             <button
               className="theme-toggle"
               onClick={onToggleTheme}

@@ -1,6 +1,8 @@
 const AppointmentService = require("../services/appointment.service");
 const Appointment = require("../models/appointment.model");
 const Provider = require("../models/provider.model");
+const Notification = require("../models/notification.model");
+
 
 // Customer creates appointment
 const createAppointment = async (req, res) => {
@@ -110,6 +112,13 @@ const acceptAppointment = async (req, res) => {
 
     const updated = await Appointment.updateAppointmentStatus(appointmentId, "confirmed");
 
+   await Notification.createNotification(
+      appointment.customer_id,
+      appointmentId,
+      "Appointment Accepted",
+      `Your ${appointment.service_name} appointment with ${appointment.business_name || "your provider"} was accepted.`
+    );
+
     res.json({ message: "Appointment accepted", data: updated });
 
   } catch (err) {
@@ -135,6 +144,13 @@ const declineAppointment = async (req, res) => {
     }
 
     const updated = await Appointment.updateAppointmentStatus(appointmentId, "cancelled");
+
+    await Notification.createNotification(
+      appointment.customer_id,
+      appointmentId,
+      "Appointment Declined",
+      `Your ${appointment.service_name} appointment with ${appointment.business_name || "your provider"} was declined.`
+    );
 
     res.json({ message: "Appointment declined", data: updated });
 
