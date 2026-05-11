@@ -65,7 +65,7 @@ function Navbar({ darkMode, onToggle, onSignUp, onLogin, onHome, currentUser, on
                 {currentUser.first_name} {currentUser.last_name}
               </span>
 
-              {currentUser.role === 'provider' && (
+              {currentUser.role && (
                 <button className="btn-outline" onClick={onDashboard}>
                   Dashboard
                 </button>

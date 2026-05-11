@@ -11,7 +11,6 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 const NAV_ITEMS = [
   { id: 'overview',     label: 'Overview',     icon: '🏠' },
   { id: 'bookings',     label: 'Bookings',     icon: '📅' },
-  { id: 'history',      label: 'History',      icon: '📜' },
   { id: 'services',     label: 'My Services',  icon: '🛠️' },
   { id: 'availability', label: 'Availability', icon: '🗓️' },
   { id: 'messages',     label: 'Messages',     icon: '💬' },
@@ -200,35 +199,132 @@ function AddServiceModal({ onClose, onUpload }) {
 // onAddService is passed down so the quick-action "Add Service" button can open
 // the modal without navigating away from Overview.
 function OverviewSection({ provider }) {
+  const [bookings, setBookings] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOverviewData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        const [bookingsRes, historyRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/appointments/provider/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_BASE_URL}/api/appointments/provider/me/history`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        const bookingsData = await bookingsRes.json();
+        const historyData = await historyRes.json();
+
+        setBookings(bookingsData.data || []);
+        setHistory(historyData.data || []);
+      } catch (err) {
+        console.error("Overview fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverviewData();
+  }, []);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingToday = bookings.filter((b) => {
+    const apptDate = new Date(b.appointment_date);
+    apptDate.setHours(0, 0, 0, 0);
+    return apptDate.getTime() === today.getTime();
+  });
+
+  const totalBookings = bookings.length + history.length;
+
+  const stats = [
+    {
+      label: "Total Bookings",
+      value: loading ? "..." : totalBookings,
+      icon: "📅",
+      note: "All time",
+    },
+    {
+      label: "Avg Rating",
+      value: "—",
+      icon: "⭐",
+      note: "Not available yet",
+    },
+    {
+      label: "Upcoming Today",
+      value: loading ? "..." : upcomingToday.length,
+      icon: "⏱️",
+      note: "Scheduled",
+    },
+  ];
+
+  const recentBookings = [...bookings]
+    .sort((a, b) => new Date(a.appointment_date) - new Date(b.appointment_date))
+    .slice(0, 3);
+
   return (
     <div className="dash-section">
-      {/* Welcome banner — uses the first letter of the provider's name as the avatar */}
       <div className="dash-welcome">
         <div className="dash-welcome-avatar">
-          {provider?.name?.[0]?.toUpperCase() ?? '?'}
+          {provider?.name?.[0]?.toUpperCase() ?? "?"}
         </div>
         <div>
           <h2 className="dash-welcome-title">
-            Welcome, {provider?.name ?? 'Provider'}!
+            Welcome, {provider?.name ?? "Provider"}!
           </h2>
           <p className="dash-welcome-sub">
-            {provider?.businessName ?? 'Your Business'}
-            {provider?.businessType ? ` · ${provider.businessType}` : ''}
+            {provider?.businessName ?? "Your Business"}
+            {provider?.businessType ? ` · ${provider.businessType}` : ""}
           </p>
         </div>
       </div>
 
-      {/* Stat grid — hardcoded zeros for now; swap with real API data later */}
       <div className="dash-stats-grid">
-        {STAT_CARDS.map((s) => <StatCard key={s.label} stat={s} />)}
+        {stats.map((s) => (
+          <StatCard key={s.label} stat={s} />
+        ))}
       </div>
 
       <div className="dash-card">
         <h3 className="dash-card-title">Recent Bookings</h3>
-        <div className="dash-empty">
-          <span>📅</span>
-          <p>No bookings yet. Share your profile link to start receiving requests.</p>
-        </div>
+
+        {recentBookings.length === 0 ? (
+          <div className="dash-empty">
+            <span>📅</span>
+            <p>No bookings yet. Share your profile link to start receiving requests.</p>
+          </div>
+        ) : (
+          <div className="service-list">
+            {recentBookings.map((b) => (
+              <div key={b.appointment_id} className="dash-card service-item">
+                <div className="service-item-info">
+                  <h3 className="service-item-name">
+                    {b.service_name || "Service"}
+                  </h3>
+                  <p className="service-item-type">
+                    {b.first_name} {b.last_name}
+                  </p>
+                </div>
+
+                <div className="service-item-meta">
+                  <span className="service-item-duration">
+                    {formatDate(b.appointment_date)}
+                  </span>
+                  <span className="service-item-price">
+                    {formatTime(b.start_time)} - {formatTime(b.end_time)}
+                  </span>
+                  <span className="archived-label">{b.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -276,38 +372,51 @@ const formatDate = (dateValue) => {
 };
 
 function BookingsSection() {
-  const [bookings, setBookings] = useState([]);
+  const [tab, setTab] = useState('upcoming');
+  const [upcoming, setUpcoming] = useState([]);
+  const [past, setPast] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const token = localStorage.getItem('token');
+  const fetchAppointments = async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const res = await fetch(`${API_BASE_URL}/api/appointments/provider/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      const token = localStorage.getItem('token');
 
-        const data = await res.json();
+      const [upcomingRes, pastRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/appointments/provider/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE_URL}/api/appointments/provider/me/history`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to fetch bookings');
-        }
+      const upcomingData = await upcomingRes.json();
+      const pastData = await pastRes.json();
 
-        setBookings(data.data || []);
-
-      } catch (err) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!upcomingRes.ok) {
+        throw new Error(upcomingData.error || 'Failed to fetch appointments');
       }
-    };
 
-    fetchBookings();
+      if (!pastRes.ok) {
+        throw new Error(pastData.error || 'Failed to fetch past appointments');
+      }
+
+      setUpcoming(upcomingData.data || []);
+      setPast(pastData.data || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAppointments();
   }, []);
 
   const handleUpdateStatus = async (appointmentId, action) => {
@@ -328,80 +437,101 @@ function BookingsSection() {
 
       if (!res.ok) throw new Error(data.error);
 
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.appointment_id === appointmentId ? data.data : b
-        )
-      );
-
+      fetchAppointments();
     } catch (err) {
       alert(err.message);
     }
   };
 
+  const renderList = (list, emptyMsg, showActions = false) => {
+    if (loading) return <p>Loading appointments...</p>;
+
+    if (list.length === 0) {
+      return (
+        <div className="dash-empty">
+          <span>📅</span>
+          <p>{emptyMsg}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="service-list">
+        {list.map((b) => (
+          <div key={b.appointment_id} className="dash-card service-item">
+            <div className="service-item-info">
+              <h3 className="service-item-name">
+                {b.service_name || "Service"}
+              </h3>
+              <p className="service-item-type">
+                {b.first_name} {b.last_name}
+              </p>
+            </div>
+
+            <div className="service-item-meta">
+              <span className="service-item-duration">
+                {formatDate(b.appointment_date)}
+              </span>
+
+              <span className="service-item-price">
+                {formatTime(b.start_time)} - {formatTime(b.end_time)}
+              </span>
+
+              {!showActions && (
+                <span className="archived-label">{b.status}</span>
+              )}
+
+              {showActions && b.status === "pending" && (
+                <div style={{ marginTop: "8px" }}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => handleUpdateStatus(b.appointment_id, "accept")}
+                  >
+                    Accept
+                  </button>
+
+                  <button
+                    className="btn-outline"
+                    onClick={() => handleUpdateStatus(b.appointment_id, "decline")}
+                    style={{ marginLeft: "8px" }}
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="dash-section">
-      <h2 className="dash-section-heading">Bookings</h2>
+      <h2 className="dash-section-heading">Appointments</h2>
+
+      <div className="dash-filter-row">
+        <button
+          className={`dash-filter-btn${tab === 'upcoming' ? ' active' : ''}`}
+          onClick={() => setTab('upcoming')}
+        >
+          Upcoming
+        </button>
+
+        <button
+          className={`dash-filter-btn${tab === 'past' ? ' active' : ''}`}
+          onClick={() => setTab('past')}
+        >
+          Past
+        </button>
+      </div>
+
+      {error && <p className="form-error">{error}</p>}
 
       <div className="dash-card">
-
-        {loading ? (
-          <p>Loading bookings...</p>
-        ) : error ? (
-          <p className="form-error">{error}</p>
-        ) : bookings.length === 0 ? (
-          <div className="dash-empty">
-            <span>📅</span>
-            <p>No bookings yet.</p>
-          </div>
-        ) : (
-          <div className="service-list">
-            {bookings.map((b) => (
-              <div key={b.appointment_id} className="dash-card service-item">
-
-                <div className="service-item-info">
-                  <h3 className="service-item-name">
-                    {b.service_name || "Service"}
-                  </h3>
-                  <p className="service-item-type">
-                    {b.first_name} {b.last_name}
-                  </p>
-                </div>
-
-                <div className="service-item-meta">
-                  <span className="service-item-duration">
-                    {formatDate(b.appointment_date)}
-                  </span>
-
-                  <span className="service-item-price">
-                    {formatTime(b.start_time)} - {formatTime(b.end_time)}
-                  </span>
-
-                  {b.status === "pending" && (
-                    <div style={{ marginTop: "8px" }}>
-                      <button
-                        className="btn-primary"
-                        onClick={() => handleUpdateStatus(b.appointment_id, "accept")}
-                      >
-                        Accept
-                      </button>
-
-                      <button
-                        className="btn-outline"
-                        onClick={() => handleUpdateStatus(b.appointment_id, "decline")}
-                        style={{ marginLeft: "8px" }}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            ))}
-          </div>
-        )}
-
+        {tab === 'upcoming'
+          ? renderList(upcoming, 'No upcoming appointments yet.', true)
+          : renderList(past, 'No past appointments yet.', false)}
       </div>
     </div>
   );
@@ -1097,7 +1227,6 @@ function ProviderDashboard({
   const renderSection = () => {
     switch (activeSection) {
       case 'bookings': return <BookingsSection />;
-      case 'history': return <HistorySection />;
       case 'services':
         return (
           <ServicesSection

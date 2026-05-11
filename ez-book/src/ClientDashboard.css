@@ -101,3 +101,27 @@
   color: var(--text-muted);
   margin-bottom: 8px;
 }
+
+/* ── Notification Bell ──*/
+.notification-bell {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  cursor: pointer;
+
+  position: relative;
+  font-size: 1.2rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-badge {
+  color: black;
+}
+
+[data-theme="dark"] .notification-badge {
+  color: white;
+}

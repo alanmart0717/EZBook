@@ -634,14 +634,17 @@ function NotificationsSection({ notifications, onMarkRead }) {
                     <span className="archived-label">New</span>
                   )}
 
+                  {n.is_read ? (
+                  <span className="archived-label">Read</span>
+                ) : (
                   <button
                     className="btn-outline"
                     onClick={() => onMarkRead(n.notification_id)}
-                    disabled={n.is_read}
                     style={{ marginTop: "8px" }}
                   >
-                    {n.is_read ? "Read" : "Mark Read"}
+                    Mark Read
                   </button>
+                )}
                 </div>
               </div>
             ))}
@@ -762,14 +765,18 @@ function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, se
           </h1>
 
           <div className="dash-topbar-provider">
-            <div className="notification-bell">
+            <button
+              className="notification-bell"
+              onClick={() => setActiveSection('notifications')}
+              aria-label="Open notifications"
+            >
               🔔
               {notifications.filter((n) => !n.is_read).length > 0 && (
                 <span className="notification-badge">
                   {notifications.filter((n) => !n.is_read).length}
                 </span>
               )}
-            </div>
+            </button>
             <button
               className="theme-toggle"
               onClick={onToggleTheme}
