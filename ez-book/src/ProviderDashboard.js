@@ -15,14 +15,7 @@ const NAV_ITEMS = [
   { id: 'availability', label: 'Availability', icon: '🗓️' },
   { id: 'messages',     label: 'Messages',     icon: '💬' },
   { id: 'profile',      label: 'Profile',      icon: '👤' },
-];
-
-// Placeholder stat cards — values will come from the backend once wired up.
-const STAT_CARDS = [
-  { label: 'Total Bookings',  value: '0',      icon: '📅', note: 'All time' },
-  { label: 'Avg Rating',      value: '—',      icon: '⭐', note: 'From reviews' },
-  { label: 'Upcoming Today',  value: '0',      icon: '🕐', note: 'Scheduled' },
-];
+]
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -532,92 +525,6 @@ function BookingsSection() {
         {tab === 'upcoming'
           ? renderList(upcoming, 'No upcoming appointments yet.', true)
           : renderList(past, 'No past appointments yet.', false)}
-      </div>
-    </div>
-  );
-}
-
-// History Section
-
-function HistorySection() {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const token = localStorage.getItem('token');
-
-        const res = await fetch(`${API_BASE_URL}/api/appointments/provider/me/history`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to fetch booking history');
-        }
-
-        setHistory(data.data || []);
-      } catch (err) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHistory();
-  }, []);
-
-  return (
-    <div className="dash-section">
-      <h2 className="dash-section-heading">Booking History</h2>
-
-      <div className="dash-card">
-        {loading ? (
-          <p>Loading booking history...</p>
-        ) : error ? (
-          <p className="form-error">{error}</p>
-        ) : history.length === 0 ? (
-          <div className="dash-empty">
-            <span>📜</span>
-            <p>No previous or cancelled bookings yet.</p>
-          </div>
-        ) : (
-          <div className="service-list">
-            {history.map((b) => (
-              <div key={b.appointment_id} className="dash-card service-item">
-                <div className="service-item-info">
-                  <h3 className="service-item-name">
-                    {b.service_name || 'Service'}
-                  </h3>
-
-                  <p className="service-item-type">
-                    {b.first_name} {b.last_name}
-                  </p>
-                </div>
-
-                <div className="service-item-meta">
-                  <span className="service-item-duration">
-                    {formatDate(b.appointment_date)}
-                  </span>
-
-                  <span className="service-item-price">
-                    {formatTime(b.start_time)} - {formatTime(b.end_time)}
-                  </span>
-
-                  <span className="archived-label">
-                    {b.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

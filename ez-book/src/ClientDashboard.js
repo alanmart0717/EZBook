@@ -306,7 +306,7 @@ function AppointmentsSection({ services, onBook }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancelTarget, setCancelTarget] = useState(null);
-  const [editLoading, setEditLoading] = useState(null);
+  const [editLoading] = useState(false);
   const [noticeModal, setNoticeModal] = useState(null);
 
   useEffect(() => {
