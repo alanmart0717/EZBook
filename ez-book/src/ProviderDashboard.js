@@ -7,6 +7,15 @@ import MessagingUI from './MessagingUI';
 // Backend API base URL. Backend server runs on port 5000 by default.
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
+const SERVICE_CATEGORIES = [
+  { id: 1, label: 'Hair & Beauty',     icon: '✂️' },
+  { id: 2, label: 'Health & Wellness', icon: '🧘' },
+  { id: 3, label: 'Home Services',     icon: '🏠' },
+  { id: 4, label: 'Fitness',           icon: '🏋️' },
+  { id: 5, label: 'Tutoring',          icon: '📚' },
+  { id: 6, label: 'Pet Care',          icon: '🐾' },
+];
+
 // Drives the sidebar and mobile bottom nav. Add a new entry here to add a new section.
 const NAV_ITEMS = [
   { id: 'overview',     label: 'Overview',     icon: '🏠' },
@@ -36,10 +45,10 @@ function StatCard({ stat }) {
 // quick-actions panel or the My Services section header.
 // Calls onUpload with a typed service object after the backend confirms creation,
 // then closes itself.
-function AddServiceModal({ onClose, onUpload }) {
-  // All four fields start empty; the form is controlled so nothing submits blank.
+function AddServiceModal({ onClose, onUpload, provider }) {
   const [form, setForm] = useState({
     serviceName: '',
+    serviceType: provider?.businessType || '',
     duration: '',
     price: '',
   });
@@ -75,6 +84,7 @@ function AddServiceModal({ onClose, onUpload }) {
         },
         body: JSON.stringify({
           service_name: form.serviceName,
+          description: form.serviceType,
           duration_minutes: parseInt(form.duration, 10),
           price: parseFloat(form.price),
         }),
@@ -93,6 +103,7 @@ function AddServiceModal({ onClose, onUpload }) {
         serviceId: data.data?.service_id,
         providerProfileId: data.data?.provider_profile_id,
         serviceName: form.serviceName,
+        serviceType: form.serviceType,
         duration: parseInt(form.duration, 10),
         price: parseFloat(form.price),
       });
@@ -118,6 +129,23 @@ function AddServiceModal({ onClose, onUpload }) {
         </div>
 
         <form className="signup-form" onSubmit={handleSubmit}>
+          <label className="form-label">
+            Category
+            <select
+              className="form-input form-select"
+              value={form.serviceType}
+              onChange={set('serviceType')}
+              required
+            >
+              <option value="" disabled>Select a category</option>
+              {SERVICE_CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.label}>
+                  {cat.icon} {cat.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="form-label">
             Service Name
             <input
@@ -534,13 +562,14 @@ function BookingsSection() {
 // Lists all services the provider has uploaded. Each service card shows the
 // name, type, duration, and price. "services" and "onAddService" both flow down
 // from App so that new uploads are also reflected on the homepage immediately.
-function ServicesSection({ 
+function ServicesSection({
   services,
   archivedServices = [],
-  onAddService, 
-  onDeleteService ,
+  onAddService,
+  onDeleteService,
   onArchiveService,
-  onUnarchiveService
+  onUnarchiveService,
+  provider,
 }) {
   const [showModal, setShowModal] = useState(false);
 
@@ -630,7 +659,7 @@ function ServicesSection({
 
       {/* Modal unmounts on close so the form always opens blank */}
       {showModal && (
-        <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} />
+        <AddServiceModal onClose={() => setShowModal(false)} onUpload={onAddService} provider={provider} />
       )}
     </div>
 
@@ -1143,6 +1172,7 @@ function ProviderDashboard({
             onDeleteService={onDeleteService}
             onArchiveService={onArchiveService}
             onUnarchiveService={onUnarchiveService}
+            provider={provider}
           />
         );
       case 'availability': return <AvailabilitySection />;
