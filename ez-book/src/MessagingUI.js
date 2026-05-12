@@ -1,172 +1,329 @@
 import { useState, useEffect, useRef } from 'react';
 import './MessagingUI.css';
 
-const DEMO_CONVERSATIONS = [
-  {
-    id: 1,
-    name: 'Sarah Johnson',
-    avatar: 'S',
-    lastMessage: 'See you tomorrow at 2pm!',
-    time: '2:30 PM',
-    unread: 1,
-  },
-  {
-    id: 2,
-    name: "Mike's Barbershop",
-    avatar: 'M',
-    lastMessage: 'Your appointment is confirmed.',
-    time: 'Yesterday',
-    unread: 0,
-  },
-  {
-    id: 3,
-    name: 'Wellness Studio',
-    avatar: 'W',
-    lastMessage: 'We look forward to seeing you!',
-    time: 'Mon',
-    unread: 0,
-  },
-];
+import {
+  getConversations,
+  getMessages,
+  sendMessage
+} from './Messages.service.js';
 
-const DEMO_MESSAGES = {
-  1: [
-    { id: 1, text: 'Hi, I have a booking for tomorrow.', sent: false, time: '2:15 PM' },
-    { id: 2, text: 'Great! Your appointment is confirmed for 2pm.', sent: true, time: '2:20 PM' },
-    { id: 3, text: 'See you tomorrow at 2pm!', sent: false, time: '2:30 PM' },
-  ],
-  2: [
-    { id: 1, text: 'Hello, I booked a haircut for Friday.', sent: true, time: 'Yesterday' },
-    { id: 2, text: 'Your appointment is confirmed.', sent: false, time: 'Yesterday' },
-  ],
-  3: [
-    { id: 1, text: 'Looking forward to the massage session!', sent: true, time: 'Mon' },
-    { id: 2, text: 'We look forward to seeing you!', sent: false, time: 'Mon' },
-  ],
-};
+function MessagingUI({initialConvId}) {
 
-function MessagingUI() {
-  const [selectedConv, setSelectedConv] = useState(DEMO_CONVERSATIONS[0]);
-  const [messages, setMessages] = useState(DEMO_MESSAGES);
+  // ─────────────────────────────
+  // State
+  // ─────────────────────────────
+  const [conversations, setConversations] = useState([]);
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+
   const bubblesEndRef = useRef(null);
 
-  // Scroll to bottom whenever the active conversation's messages change
+  // Current logged in user
+  const user = JSON.parse(localStorage.getItem('user'));
+
+  // ─────────────────────────────
+  // Load conversations
+  // ─────────────────────────────
+ useEffect(() => {
+    if (!user?.user_id) return;
+
+    async function loadConversations() {
+        try {
+            const data = await getConversations(user.user_id);
+            const convs = data.conversations || [];
+            setConversations(convs);                    // ← move setConversations here
+
+            const target = initialConvId
+                ? convs.find(c => c.id === initialConvId)
+                : convs[0];
+
+            if (target) setSelectedConv(target);
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    loadConversations();
+}, []);  // keep deps array empty
+
+  // ─────────────────────────────
+  // Load messages for conversation
+  // ─────────────────────────────
   useEffect(() => {
-    bubblesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, selectedConv]);
 
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text || !selectedConv) return;
+    async function loadMessages() {
 
-    const newMsg = {
-      id: Date.now(),
-      text,
-      sent: true,
-      time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-    };
+      if (!selectedConv) return;
 
-    setMessages((prev) => ({
-      ...prev,
-      [selectedConv.id]: [...(prev[selectedConv.id] || []), newMsg],
-    }));
+      try {
 
-    setInput('');
+        const data = await getMessages(selectedConv.id);
+
+        setMessages(data.messages || []);
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadMessages();
+
+  }, [selectedConv]);
+
+  // ─────────────────────────────
+  // Poll messages every 3 seconds
+  // ─────────────────────────────
+  useEffect(() => {
+
+    if (!selectedConv) return;
+
+    const interval = setInterval(async () => {
+
+      try {
+
+        const data = await getMessages(selectedConv.id);
+
+        setMessages(data.messages || []);
+
+      } catch (err) {
+        console.error(err);
+      }
+
+    }, 3000);
+
+    return () => clearInterval(interval);
+
+  }, [selectedConv]);
+
+  // ─────────────────────────────
+  // Auto scroll to bottom
+  // ─────────────────────────────
+  useEffect(() => {
+
+    bubblesEndRef.current?.scrollIntoView({
+      behavior: 'smooth'
+    });
+
+  }, [messages]);
+
+  // ─────────────────────────────
+  // Send message
+  // ─────────────────────────────
+  const handleSend = async () => {
+
+    const txt = input.trim();
+
+    if (!txt || !selectedConv) return;
+
+    try {
+
+      const data = await sendMessage({
+        ConversationID: selectedConv.id,
+        SenderID: user.user_id,
+        txt
+      });
+
+      setMessages(prev => [
+        ...prev,
+        data.message
+      ]);
+
+      setInput('');
+
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  // ─────────────────────────────
+  // Enter key send
+  // ─────────────────────────────
   const handleKeyDown = (e) => {
+
     if (e.key === 'Enter' && !e.shiftKey) {
+
       e.preventDefault();
+
       handleSend();
     }
   };
 
-  const currentMessages = messages[selectedConv?.id] || [];
+  // Current messages
+  const currentMessages = messages;
 
   return (
-    <div className="msg-layout">
-      {/* ── Conversation list ── */}
-      <aside className="msg-sidebar">
-        <div className="msg-sidebar-header">
-          <h3 className="msg-sidebar-title">Messages</h3>
-        </div>
+  <div className="msg-layout">
 
-        <div className="msg-conv-list">
-          {DEMO_CONVERSATIONS.map((conv) => (
-            <button
-              key={conv.id}
-              className={`msg-conv-item${selectedConv?.id === conv.id ? ' active' : ''}`}
-              onClick={() => setSelectedConv(conv)}
-            >
-              <div className="msg-conv-avatar">{conv.avatar}</div>
+    {/* ───────────────── Sidebar ───────────────── */}
+    <aside className="msg-sidebar">
 
-              <div className="msg-conv-info">
-                <div className="msg-conv-name">{conv.name}</div>
-                <div className="msg-conv-preview">{conv.lastMessage}</div>
+      <div className="msg-sidebar-header">
+        <h3 className="msg-sidebar-title">
+          Messages
+        </h3>
+      </div>
+
+      <div className="msg-conv-list">
+
+        {conversations.map((conv) => (
+
+          <button
+            key={conv.id}
+            className={`msg-conv-item${
+              selectedConv?.id === conv.id
+                ? ' active'
+                : ''
+            }`}
+            onClick={() => setSelectedConv(conv)}
+          >
+
+            <div className="msg-conv-avatar">
+              {(conv.clientId?.[0] || 'U').toUpperCase()}
+            </div>
+
+            <div className="msg-conv-info">
+
+              <div className="msg-conv-name">
+                Conversation
               </div>
 
-              <div className="msg-conv-meta">
-                <span className="msg-conv-time">{conv.time}</span>
-                {conv.unread > 0 && (
-                  <span className="msg-conv-badge">{conv.unread}</span>
-                )}
+              <div className="msg-conv-preview">
+                Booking Chat
               </div>
-            </button>
-          ))}
-        </div>
-      </aside>
 
-      {/* ── Message area ── */}
-      <div className="msg-main">
-        {selectedConv ? (
-          <>
-            <header className="msg-header">
-              <div className="msg-header-avatar">{selectedConv.avatar}</div>
-              <span className="msg-header-name">{selectedConv.name}</span>
-            </header>
+            </div>
 
-            <div className="msg-bubbles">
-              {currentMessages.map((msg) => (
+            <div className="msg-conv-meta">
+
+              <span className="msg-conv-time">
+                Active
+              </span>
+
+            </div>
+
+          </button>
+
+        ))}
+
+      </div>
+
+    </aside>
+
+    {/* ───────────────── Main Chat ───────────────── */}
+    <div className="msg-main">
+
+      {selectedConv ? (
+
+        <>
+
+          {/* Header */}
+          <header className="msg-header">
+
+            <div className="msg-header-avatar">
+              {(selectedConv.clientId?.[0] || 'U').toUpperCase()}
+            </div>
+
+            <span className="msg-header-name">
+              Conversation
+            </span>
+
+          </header>
+
+          {/* Messages */}
+          <div className="msg-bubbles">
+
+            {currentMessages.map((msg) => {
+
+              const isSent =
+                msg.SenderId === user.user_id;
+
+              return (
+
                 <div
                   key={msg.id}
-                  className={`msg-bubble-row${msg.sent ? ' msg-bubble-row--sent' : ''}`}
+                  className={`msg-bubble-row${
+                    isSent
+                      ? ' msg-bubble-row--sent'
+                      : ''
+                  }`}
                 >
-                  <div className={`msg-bubble${msg.sent ? ' msg-bubble--sent' : ' msg-bubble--received'}`}>
-                    {msg.text}
+
+                  <div
+                    className={`msg-bubble${
+                      isSent
+                        ? ' msg-bubble--sent'
+                        : ' msg-bubble--received'
+                    }`}
+                  >
+                    {msg.txt}
                   </div>
-                  <span className="msg-bubble-time">{msg.time}</span>
+
+                  <span className="msg-bubble-time">
+
+                    {
+                      new Date(msg.timestamp)
+                        .toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                    }
+
+                  </span>
+
                 </div>
-              ))}
-              <div ref={bubblesEndRef} />
-            </div>
 
-            <div className="msg-input-row">
-              <textarea
-                className="msg-input"
-                placeholder="Type a message… (Enter to send)"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-              />
-              <button
-                className="btn-primary msg-send-btn"
-                onClick={handleSend}
-                disabled={!input.trim()}
-              >
-                Send
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="msg-empty">
-            <span>💬</span>
-            <p>Select a conversation to start messaging.</p>
+              );
+            })}
+
+            <div ref={bubblesEndRef} />
+
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
+          {/* Input */}
+          <div className="msg-input-row">
+
+            <textarea
+              className="msg-input"
+              placeholder="Type a message..."
+              value={input}
+              onChange={(e) =>
+                setInput(e.target.value)
+              }
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
+
+            <button
+              className="btn-primary msg-send-btn"
+              onClick={handleSend}
+              disabled={!input.trim()}
+            >
+              Send
+            </button>
+
+          </div>
+
+        </>
+
+      ) : (
+
+        <div className="msg-empty">
+
+          <span>💬</span>
+
+          <p>
+            Select a conversation.
+          </p>
+
+        </div>
+
+      )}
+
+    </div>
+
+  </div>
+);
+}
 export default MessagingUI;

@@ -217,7 +217,8 @@ function AddServiceModal({ onClose, onUpload, provider }) {
 // live stat cards, a recent bookings preview, and quick-action shortcuts.
 // onAddService is passed down so the quick-action "Add Service" button can open
 // the modal without navigating away from Overview.
-function OverviewSection({ provider }) {
+function OverviewSection({ provider }) 
+{
   const [bookings, setBookings] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -386,7 +387,7 @@ const formatDate = (dateValue) => {
   });
 };
 
-function BookingsSection() {
+function BookingsSection({onNavigateToMessages}) {
   const [tab, setTab] = useState('upcoming');
   const [upcoming, setUpcoming] = useState([]);
   const [past, setPast] = useState([]);
@@ -457,6 +458,43 @@ function BookingsSection() {
       alert(err.message);
     }
   };
+    const handleMessageClient = async (booking) => {
+        try {
+            const token = localStorage.getItem('token');
+            const user  = JSON.parse(localStorage.getItem('user'));
+
+            const res = await fetch(`${API_BASE_URL}/api/messages/conversation`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    BookingId:  booking.appointment_id,
+                    ClientID:   String(booking.customer_id),
+                    ProviderID: String(user.user_id)
+                })
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server error ${res.status}: ${text.slice(0, 200)}`);
+            }
+
+            const data = await res.json();
+
+            if (data.success) {
+                onNavigateToMessages(data.conversation.id);
+            } else {
+                throw new Error(data.error || 'Failed to create conversation');
+            }
+
+        } catch (err) {
+            console.error('Failed to start conversation:', err.message);
+            alert(`Could not open conversation: ${err.message}`);
+        }
+    };
+  
 
   const renderList = (list, emptyMsg, showActions = false) => {
     if (loading) return <p>Loading appointments...</p>;
@@ -512,6 +550,14 @@ function BookingsSection() {
                   >
                     Decline
                   </button>
+
+
+                  <button
+                   className="btn-outline"
+                    onClick={() => handleMessageClient(b)}
+                  >
+                   💬 Message Client
+                    </button>
                 </div>
               )}
             </div>
@@ -1152,11 +1198,20 @@ function ProviderDashboard({
   onUnarchiveService
 }) {
   const [activeSection, setActiveSection] = useState('overview');
+  const [initialConvId, setInitialConvId] = useState(null); 
 
   // Swaps the main content area based on the active nav item.
   const renderSection = () => {
     switch (activeSection) {
-      case 'bookings': return <BookingsSection />;
+      case 'bookings':
+        return (
+          <BookingsSection
+            onNavigateToMessages={(convId) => {
+              setActiveSection('messages');
+              setInitialConvId(convId);
+            }}
+          />
+        );
       case 'services':
         return (
           <ServicesSection
@@ -1170,14 +1225,10 @@ function ProviderDashboard({
           />
         );
       case 'availability': return <AvailabilitySection />;
-      case 'messages':     return <MessagingUI />;
-      case 'profile': return <ProfileSection provider={provider} />;
+      case 'messages':     return <MessagingUI initialConvId={initialConvId} />;
+      case 'profile':      return <ProfileSection provider={provider} />;
       default:
-        return (
-          <OverviewSection
-            provider={provider}
-          />
-        );
+        return <OverviewSection provider={provider} />;
     }
   };
 
