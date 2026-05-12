@@ -32,15 +32,27 @@ const formatTime = (timeValue) => {
 };
 
 const formatDate = (dateValue) => {
-  if (!dateValue) return '';
-  const date = new Date(dateValue);
+  if (!dateValue) return "";
+
+  const dateOnly = String(dateValue).split("T")[0];
+  const [year, month, day] = dateOnly.split("-").map(Number);
+
+  const date = new Date(year, month - 1, day);
   const today = new Date();
+
   const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
   const diffDays = (d1 - d2) / (1000 * 60 * 60 * 24);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Tomorrow';
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 };
 
 // Check if appointment can still be cancelled/rescheduled
@@ -325,7 +337,9 @@ function AppointmentsSection({ services, onBook }) {
 
         setUpcoming(
           all.filter((b) => {
-            const apptDate = new Date(b.appointment_date);
+            const dateOnly = String(b.appointment_date).split("T")[0];
+            const [year, month, day] = dateOnly.split("-").map(Number);
+            const apptDate = new Date(year, month - 1, day);
             apptDate.setHours(0, 0, 0, 0);
             return (
               (b.status === 'pending' || b.status === 'confirmed') &&
@@ -336,7 +350,9 @@ function AppointmentsSection({ services, onBook }) {
 
         setPast(
           all.filter((b) => {
-            const apptDate = new Date(b.appointment_date);
+            const dateOnly = String(b.appointment_date).split("T")[0];
+            const [year, month, day] = dateOnly.split("-").map(Number);
+            const apptDate = new Date(year, month - 1, day);
             apptDate.setHours(0, 0, 0, 0);
             return b.status === 'cancelled' || apptDate < today;
           })

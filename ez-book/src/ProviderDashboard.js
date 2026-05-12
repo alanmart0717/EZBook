@@ -17,8 +17,6 @@ const NAV_ITEMS = [
   { id: 'profile',      label: 'Profile',      icon: '👤' },
 ]
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
 // Renders a single metric tile in the Overview stats grid.
 function StatCard({ stat }) {
   return (
@@ -345,10 +343,12 @@ const formatTime = (timeValue) => {
 const formatDate = (dateValue) => {
   if (!dateValue) return "";
 
-  const date = new Date(dateValue);
+  const dateOnly = String(dateValue).split("T")[0];
+  const [year, month, day] = dateOnly.split("-").map(Number);
+
+  const date = new Date(year, month - 1, day);
   const today = new Date();
 
-  // Normalize time (remove hours/minutes)
   const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
