@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import './ProviderDashboard.css';
 import MessagingUI from './MessagingUI';
+import { createOrGetConversation } from './LocalMessagingStore';
 
 // ── Static Data ────────────────────────────────────────────────────────────────
 
@@ -387,7 +388,7 @@ const formatDate = (dateValue) => {
   });
 };
 
-function BookingsSection({onNavigateToMessages}) {
+function BookingsSection({ onNavigateToMessages, providerUserId, providerName }) {
   const [tab, setTab] = useState('upcoming');
   const [upcoming, setUpcoming] = useState([]);
   const [past, setPast] = useState([]);
@@ -458,41 +459,16 @@ function BookingsSection({onNavigateToMessages}) {
       alert(err.message);
     }
   };
-    const handleMessageClient = async (booking) => {
-        try {
-            const token = localStorage.getItem('token');
-            const user  = JSON.parse(localStorage.getItem('user'));
-
-            const res = await fetch(`${API_BASE_URL}/api/messages/conversation`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    BookingId:  booking.appointment_id,
-                    ClientID:   String(booking.customer_id),
-                    ProviderID: String(user.user_id)
-                })
-            });
-
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`Server error ${res.status}: ${text.slice(0, 200)}`);
-            }
-
-            const data = await res.json();
-
-            if (data.success) {
-                onNavigateToMessages(data.conversation.id);
-            } else {
-                throw new Error(data.error || 'Failed to create conversation');
-            }
-
-        } catch (err) {
-            console.error('Failed to start conversation:', err.message);
-            alert(`Could not open conversation: ${err.message}`);
-        }
+    const handleMessageClient = (booking) => {
+        const clientName = `${booking.first_name ?? ''} ${booking.last_name ?? ''}`.trim() || 'Client';
+        const conv = createOrGetConversation(
+            booking.appointment_id,
+            booking.customer_id,
+            providerUserId,
+            clientName,
+            providerName
+        );
+        onNavigateToMessages(conv.id);
     };
   
 
@@ -534,30 +510,32 @@ function BookingsSection({onNavigateToMessages}) {
                 <span className="archived-label">{b.status}</span>
               )}
 
-              {showActions && b.status === "pending" && (
+              {showActions && (
                 <div style={{ marginTop: "8px" }}>
-                  <button
-                    className="btn-primary"
-                    onClick={() => handleUpdateStatus(b.appointment_id, "accept")}
-                  >
-                    Accept
-                  </button>
-
+                  {b.status === "pending" && (
+                    <>
+                      <button
+                        className="btn-primary"
+                        onClick={() => handleUpdateStatus(b.appointment_id, "accept")}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        className="btn-outline"
+                        onClick={() => handleUpdateStatus(b.appointment_id, "decline")}
+                        style={{ marginLeft: "8px" }}
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
                   <button
                     className="btn-outline"
-                    onClick={() => handleUpdateStatus(b.appointment_id, "decline")}
+                    onClick={() => handleMessageClient(b)}
                     style={{ marginLeft: "8px" }}
                   >
-                    Decline
+                    💬 Message Client
                   </button>
-
-
-                  <button
-                   className="btn-outline"
-                    onClick={() => handleMessageClient(b)}
-                  >
-                   💬 Message Client
-                    </button>
                 </div>
               )}
             </div>
@@ -1210,6 +1188,8 @@ function ProviderDashboard({
               setActiveSection('messages');
               setInitialConvId(convId);
             }}
+            providerUserId={provider?.user?.user_id}
+            providerName={provider?.name}
           />
         );
       case 'services':
@@ -1225,7 +1205,7 @@ function ProviderDashboard({
           />
         );
       case 'availability': return <AvailabilitySection />;
-      case 'messages':     return <MessagingUI initialConvId={initialConvId} />;
+      case 'messages':     return <MessagingUI initialConvId={initialConvId} currentUserId={provider?.user?.user_id} />;
       case 'profile':      return <ProfileSection provider={provider} />;
       default:
         return <OverviewSection provider={provider} />;

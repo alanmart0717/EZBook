@@ -1687,26 +1687,29 @@ export default function App() {
         const token = localStorage.getItem('token');
 
         const res = await fetch(`${API_BASE_URL}/api/provider/profile/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
+        if (!res.ok) throw new Error('profile fetch failed');
+
         const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error);
-
+        setProviderData((prev) => ({ ...prev, profile: data.data }));
+      } catch (err) {
+        console.warn('Profile fetch failed, using session data:', err.message);
         setProviderData((prev) => ({
           ...prev,
-          profile: data.data,
+          profile: {
+            name: `${currentUser.first_name ?? ''} ${currentUser.last_name ?? ''}`.trim(),
+            email: currentUser.email ?? '',
+            businessName: '',
+            businessType: '',
+            location: '',
+            bio: '',
+          },
         }));
-
-        setPage('provider-dashboard');
-      } catch (err) {
-        console.error(err);
-        alert("Failed to load provider profile");
       }
 
+      setPage('provider-dashboard');
       return;
     }
 

@@ -739,7 +739,7 @@ function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, se
         return <NotificationsSection notifications={notifications} onMarkRead={handleMarkNotificationRead} />;
 
       case 'messages':
-        return <MessagingUI />;
+        return <MessagingUI currentUserId={client?.user_id} />;
 
       case 'profile':
         return <ProfileSection client={client} />;

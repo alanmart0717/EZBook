@@ -183,10 +183,14 @@
 }
 
 .msg-bubble--received {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: #e5e7eb;
+  color: #111827;
   border-bottom-left-radius: 4px;
+}
+
+[data-theme="dark"] .msg-bubble--received {
+  background: #374151;
+  color: #f9fafb;
 }
 
 .msg-bubble--sent {
