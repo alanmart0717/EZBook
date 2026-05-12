@@ -52,6 +52,17 @@ const createAppointment = async (userId, data) => {
     const startMinutes = timeToMinutes(normalizedStartTime);
     const end_time = minutesToTime(startMinutes + durationMinutes);
 
+    // Check if appointment is in the past
+    const dateOnly = String(appointment_date).split("T")[0];
+    const cleanStartTime = String(start_time).split("-")[0];
+
+    const appointmentDateTime = new Date(`${dateOnly}T${cleanStartTime}`);
+    const now = new Date();
+
+    if (appointmentDateTime < now) {
+    throw new Error("Cannot book an appointment time that has already passed");
+    }
+
     // Check provider availability
     const isAvailable = await Availability.checkAvailability(
         provider_profile_id,

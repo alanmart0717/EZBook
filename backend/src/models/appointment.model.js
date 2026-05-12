@@ -230,6 +230,16 @@ const getAvailableTimes = async (
         while (currentStart + serviceDuration <= availableEnd) {
             const currentEnd = currentStart + serviceDuration;
 
+            // Do not show time slots that already passed
+            const dateOnly = String(appointmentDate).split("T")[0];
+            const slotStartTime = minutesToTime(currentStart);
+            const slotDateTime = new Date(`${dateOnly}T${slotStartTime}`);
+
+            if (slotDateTime < new Date()) {
+                currentStart += serviceDuration + BUFFER_MINUTES;
+                continue;
+            }
+
             const appointmentDay = new Date(`${appointmentDate}T00:00:00`)
                 .toLocaleDateString("en-US", { weekday: "long" })
                 .toLowerCase();

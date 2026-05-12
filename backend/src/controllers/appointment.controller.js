@@ -110,6 +110,18 @@ const acceptAppointment = async (req, res) => {
         return res.status(403).json({ error: "Not authorized" });
     }
 
+    const dateOnly = String(appointment.appointment_date).split("T")[0];
+    const cleanStartTime = String(appointment.start_time).split("-")[0];
+
+    const appointmentDateTime = new Date(`${dateOnly}T${cleanStartTime}`);
+    const now = new Date();
+
+    if (appointmentDateTime < now) {
+      return res.status(400).json({
+        error: "Cannot accept an appointment that has already passed"
+      });
+    }
+
     const updated = await Appointment.updateAppointmentStatus(appointmentId, "confirmed");
 
    await Notification.createNotification(
