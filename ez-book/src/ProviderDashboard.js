@@ -270,12 +270,6 @@ function OverviewSection({ provider }) {
       note: "All time",
     },
     {
-      label: "Avg Rating",
-      value: "—",
-      icon: "⭐",
-      note: "Not available yet",
-    },
-    {
       label: "Upcoming Today",
       value: loading ? "..." : upcomingToday.length,
       icon: "⏱️",
