@@ -20,7 +20,7 @@ function MessagingUI({ initialConvId, currentUserId }) {
   const getOtherName = (conv) => {
     if (!conv) return 'Chat';
     const isProvider = userId === String(conv.ProviderID);
-    return isProvider ? (conv.clientName ?? 'Client') : (conv.providerName ?? 'Provider');
+    return isProvider ? (conv.clientName ?? 'client') : (conv.providerName ?? 'Provider');
   };
 
   useEffect(() => {
