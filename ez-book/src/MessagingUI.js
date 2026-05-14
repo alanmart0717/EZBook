@@ -20,7 +20,21 @@ function MessagingUI({ initialConvId, currentUserId }) {
   const getOtherName = (conv) => {
     if (!conv) return 'Chat';
     const isProvider = userId === String(conv.ProviderID);
-    return isProvider ? (conv.clientName ?? 'client') : (conv.providerName ?? 'Provider');
+    return isProvider ? (conv.clientName ?? 'Client') : (conv.providerName ?? 'Provider');
+  };
+
+  // Returns the label to show above the first message of each new day.
+  // Within 7 days: "Today" / "Yesterday" / day name. Older: full date.
+  const formatDateSep = (timestamp) => {
+    const d = new Date(timestamp);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((today - msgDay) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
   useEffect(() => {
@@ -113,19 +127,27 @@ function MessagingUI({ initialConvId, currentUserId }) {
             </header>
 
             <div className="msg-bubbles">
-              {messages.map((msg) => {
+              {messages.map((msg, index) => {
                 const isSent = String(msg.SenderID) === userId;
+
+                // Show a date separator when the day changes between messages
+                const msgDateStr = new Date(msg.timestamp).toDateString();
+                const prevDateStr = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : null;
+                const showSep = msgDateStr !== prevDateStr;
+
                 return (
-                  <div
-                    key={msg.id}
-                    className={`msg-bubble-row${isSent ? ' msg-bubble-row--sent' : ''}`}
-                  >
-                    <div className={`msg-bubble${isSent ? ' msg-bubble--sent' : ' msg-bubble--received'}`}>
-                      {msg.txt}
+                  <div key={msg.id}>
+                    {showSep && (
+                      <div className="msg-date-sep">{formatDateSep(msg.timestamp)}</div>
+                    )}
+                    <div className={`msg-bubble-row${isSent ? ' msg-bubble-row--sent' : ''}`}>
+                      <div className={`msg-bubble${isSent ? ' msg-bubble--sent' : ' msg-bubble--received'}`}>
+                        {msg.txt}
+                      </div>
+                      <span className="msg-bubble-time">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                    <span className="msg-bubble-time">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
                   </div>
                 );
               })}

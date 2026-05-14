@@ -205,6 +205,26 @@
   padding: 0 4px;
 }
 
+/* ── Date separator ── */
+.msg-date-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 40px 8px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.msg-date-sep::before,
+.msg-date-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 /* ── Input row ── */
 .msg-input-row {
   display: flex;

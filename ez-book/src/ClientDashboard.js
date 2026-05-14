@@ -672,10 +672,16 @@ function NotificationsSection({ notifications, onMarkRead }) {
 }
 
 // ── Client Dashboard (root export) ────────────────────────────────────────────
-function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, services, onBook }) {
-  const [activeSection, setActiveSection] = useState('dashboard');
+function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, services, onBook, initialConvId, onConsumeInitialConv }) {
+  const [activeSection, setActiveSection] = useState(initialConvId ? 'messages' : 'dashboard');
   const [notifications, setNotifications] = useState([]);
-  
+
+  useEffect(() => {
+    if (initialConvId) {
+      setActiveSection('messages');
+    }
+  }, [initialConvId]);
+
   useEffect(() => {
   const fetchNotifications = async () => {
     try {
@@ -739,7 +745,7 @@ function ClientDashboard({ client, onLogout, onHome, darkMode, onToggleTheme, se
         return <NotificationsSection notifications={notifications} onMarkRead={handleMarkNotificationRead} />;
 
       case 'messages':
-        return <MessagingUI currentUserId={client?.user_id} />;
+        return <MessagingUI currentUserId={client?.user_id} initialConvId={initialConvId} />;
 
       case 'profile':
         return <ProfileSection client={client} />;

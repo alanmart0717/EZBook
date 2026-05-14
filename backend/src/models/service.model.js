@@ -36,7 +36,7 @@ const createService = async (
 const getAllServices = async () => {
   const result = await db.query(
     `
-    SELECT 
+    SELECT
       s.service_id,
       s.provider_profile_id,
       s.service_name,
@@ -44,6 +44,7 @@ const getAllServices = async () => {
       s.duration_minutes,
       s.price,
       p.business_name,
+      u.user_id AS provider_user_id,
       u.first_name || ' ' || u.last_name AS provider_name
     FROM services s
     JOIN provider_profiles p ON s.provider_profile_id = p.provider_profile_id

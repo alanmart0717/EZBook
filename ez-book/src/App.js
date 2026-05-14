@@ -16,6 +16,7 @@ import { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import ProviderDashboard from './ProviderDashboard';
 import ClientDashboard from './ClientDashboard';
+import { createOrGetConversation } from './LocalMessagingStore';
 
 /**
  * Backend API base URL
@@ -690,7 +691,7 @@ function NoticeModal({ title, message, onClose }) {
  * Loads provider availability, allows the customer to choose an available day
  * and time, then creates an appointment through the backend.
  */
-function BookingModal({ service, onClose, setNoticeModal }) {
+function BookingModal({ service, onClose, setNoticeModal, currentUser, onMessageProvider }) {
   const todayDate = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -950,6 +951,27 @@ function BookingModal({ service, onClose, setNoticeModal }) {
               >
                 {service.rescheduleAppointmentId ? "Cancel Reschedule" : "Cancel"}
               </button>
+
+              {currentUser?.role === 'customer' && onMessageProvider && (
+                <button
+                  type="button"
+                  className="btn-outline"
+                  onClick={() => {
+                    const clientName = `${currentUser.first_name ?? ''} ${currentUser.last_name ?? ''}`.trim() || 'Client';
+                    const conv = createOrGetConversation(
+                      `service_${service.serviceId}`,
+                      currentUser.user_id,
+                      service.providerUserId,
+                      clientName,
+                      service.providerName
+                    );
+                    onMessageProvider(conv.id);
+                  }}
+                >
+                  💬 Message Provider
+                </button>
+              )}
+
               <button
                 type="button"
                 className="btn-primary"
@@ -1186,6 +1208,7 @@ export default function App() {
   const [archivedServices, setArchivedServices] = useState([]);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [noticeModal, setNoticeModal] = useState(null);
+  const [clientInitialConvId, setClientInitialConvId] = useState(null);
   /**
  * Restore logged-in user after page refresh
  */
@@ -1278,6 +1301,7 @@ export default function App() {
           duration: s.duration_minutes,
           price: s.price,
           providerName: s.provider_name || 'Provider',
+          providerUserId: s.provider_user_id,
           businessName: s.business_name || '',
         }));
 
@@ -1619,6 +1643,8 @@ export default function App() {
           onToggleTheme={toggleDark}
           services={services}
           onBook={handleBookClick}
+          initialConvId={clientInitialConvId}
+          onConsumeInitialConv={() => setClientInitialConvId(null)}
         />
       );
     }
@@ -1746,6 +1772,12 @@ export default function App() {
           service={selectedService}
           onClose={() => setSelectedService(null)}
           setNoticeModal={setNoticeModal}
+          currentUser={currentUser}
+          onMessageProvider={(convId) => {
+            setSelectedService(null);
+            setClientInitialConvId(convId);
+            setPage('client-dashboard');
+          }}
         />
       )}
 
