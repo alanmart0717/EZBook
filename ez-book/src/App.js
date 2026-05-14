@@ -952,27 +952,7 @@ function BookingModal({ service, onClose, setNoticeModal, currentUser, onMessage
                 {service.rescheduleAppointmentId ? "Cancel Reschedule" : "Cancel"}
               </button>
 
-              {currentUser?.role === 'customer' && onMessageProvider && (
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => {
-                    const clientName = `${currentUser.first_name ?? ''} ${currentUser.last_name ?? ''}`.trim() || 'Client';
-                    const conv = createOrGetConversation(
-                      `service_${service.serviceId}`,
-                      currentUser.user_id,
-                      service.providerUserId,
-                      clientName,
-                      service.providerName
-                    );
-                    onMessageProvider(conv.id);
-                  }}
-                >
-                  💬 Message Provider
-                </button>
-              )}
-
-              <button
+<button
                 type="button"
                 className="btn-primary"
                 disabled={!selectedDate}
